@@ -1,0 +1,863 @@
+#!/bin/bash
+# set -x
+#
+# ---------------------------------------------------------------
+# Script that runs the NOAA Environmental Modeling System (NEMS)
+# through a compset based list of configurations.
+#
+# The NEMSCompsetRun script utilizes the existing NEMS script infrastructure
+# in order to set up the run directory, gsm or nmm input files, and batch
+# scripts.
+#
+#   --> rt_gfs.sh [ here generate lower files from IN files ]
+#       --> gfs_qsub or gfs_msub or gfs_bsub  [ generated from IN files ]
+#           --> gfs_fcst_run [ generated from IN file ]
+#               --> exglobal_fcst_nems.sh
+#                   --> mpirun NEMS.x
+#
+# -- or --
+#
+#   --> rt_nmm.sh [ here generate lower files from IN files ]
+#       --> nmm_run [ generated from IN file ]
+#           --> nmm_qsub or nmm_msub or nmm_bsub  [ generated from IN files ]
+#               --> mpirun NEMS.x
+#
+# ---------------------------------------------------------------
+
+# -- procedures first --
+
+set_defaults ()
+{
+TASKS_dflt=48  ; TPN_dflt=   ; INPES_dflt=05 ; JNPES_dflt=09 ; WTPG_dflt=3
+TASKS_thrd=48  ; TPN_thrd=   ; INPES_thrd=05 ; JNPES_thrd=09 ; WTPG_thrd=3
+TASKS_nest=96  ; TPN_nest=   ; INPES_nest=02 ; JNPES_nest=02 ; WTPG_nest=1
+TASKS_fltr=64  ; TPN_fltr=   ; INPES_fltr=02 ; JNPES_fltr=02 ; WTPG_fltr=1
+TASKS_mvg1=96  ; TPN_mvg1=   ; INPES_mvg1=05 ; JNPES_mvg1=07 ; WTPG_mvg1=1
+TASKS_mvg2=96  ; TPN_mvg2=   ; INPES_mvg2=05 ; JNPES_mvg2=18 ; WTPG_mvg2=2
+}
+
+export_common ()
+{
+set_defaults
+export THRD=1
+export WTPG=$WTPG_dflt
+export WLCLK=10
+export GEFS_ENSEMBLE=0
+export GEN_ENSEMBLE=0
+export WRITE_DOPOST=.false.
+export POST_GRIBVERSION='"grib1"'
+check_executable
+}
+
+export_nmm ()
+{
+export_common
+export INPES=$INPES_dflt ; export JNPES=$JNPES_dflt ; export WTPG=$WTPG_dflt
+export TASKS=$TASKS_dflt ; export TPN=$TPN_dflt
+export GBRG=reg          ; export NEMSI=false       ; export RSTRT=false
+export AFFN=core         ; export NODE=1
+export NCHILD=0          ; export MODE=1-way        ; export WGT=0.0
+export FCSTL=48
+export PCPFLG=false      ; export WPREC=false
+export TS=false
+export RADTN=rrtm        ; export CONVC=bmj         ; export TURBL=myj
+export MICRO=fer_hires   ; export gfsP=false        ; export SPEC_ADV=false
+export SFC_LAYER=gfdl    ; export LAND_SURFACE=gfdlslab
+}
+
+export_gsm ()
+{
+export_common
+export TASKS=32  ; export PE1=32       ; export NSOUT=0       ; export QUILT=.false.
+export NDAYS=2   ; export CP2=.false.  ; export IAER=0        ; export FHRES=180
+export WRTGP=1   ; export FDFI=0       ; export ADIAB=.false. ; export REDUCEDGRID=.true.
+export wave=62   ; export THRD=1       ; unset  NHRS
+export lm=64     ; export lsoil=4         ; export MEMBER_NAMES=c00
+export IDVC=2    ; export THERMODYN_ID=1  ; export SFCPRESS_ID=1 ; export SPECTRALLOOP=2
+export NEMSIOIN=.false.  ; export NEMSIOOUT=.false. ; export rungfstest=.true.
+export SIGIOIN=.true.    ; export SIGIOOUT=.true.   ; export SFCIOOUT=.true.
+export FHSWR=3600        ;  export FHLWR=3600       ; LDFI_SPECT=.true.
+export CDATE=2012010100
+export GOCART_AER2POST=.false.
+export NST_FCST=0  ; export NDSLFV=.false.  ; export IDEA=.false.
+export SLG=.false.
+export A2OI_OUT=.false. ; export NGRID_A2OI=48
+}
+
+export_fim ()
+{
+export_common
+export FIM_USE_NEMS=true
+}
+
+export_nems ()
+{
+export nems_configure=default
+export atm_model=none
+export atm_petlist_bounds="-1 -1"
+export lnd_model=none
+export lnd_petlist_bounds="-1 -1"
+export ice_model=none
+export ice_petlist_bounds="-1 -1"
+export ocn_model=none
+export ocn_petlist_bounds="-1 -1"
+export wav_model=none
+export wav_petlist_bounds="-1 -1"
+export ipm_model=none
+export ipm_petlist_bounds="-1 -1"
+export hyd_model=none
+export hyd_petlist_bounds="-1 -1"
+export med_model=none
+export med_petlist_bounds="-1 -1"
+export atm_coupling_interval_sec=-1
+export ocn_coupling_interval_sec=-1
+export coupling_interval_sec=-1
+export coupling_interval_slow_sec=-1
+export coupling_interval_fast_sec=-1
+}
+
+check_executable ()
+{
+if [ -f ${PATHTR}/exe/NEMS.x ] ; then
+  echo "   The ${PATHTR}/exe/NEMS.x executable IS available."
+else
+  echo "   The ${PATHTR}/exe/NEMS.x executable is NOT available. Must first compile NEMS!"
+  echo "...bailing out!"
+  exit 1    
+fi
+}
+
+# -- component specific setup functions
+
+setup_med_nems_old(){
+  echo "setup_med_nems ... "
+  nemsgrid="nx1"
+  nemsgridinp=""
+  echo "NEMS_GRID = $NEMS_GRID"
+  if [ -n "$NEMS_GRID" ] ; then
+    if [[ $NEMS_GRID = *nx1* ]] ; then
+      nemsgrid="nx1"
+    elif [[ $NEMS_GRID = *mx5* ]] ; then
+      nemsgrid="mx5"
+      nemsgridinp="D"
+    fi
+  fi
+  #echo "NEMSCompsetRun nemsgrid = ${nemsgrid}"
+  #echo "NEMSCompsetRun nemsgridinp = ${nemsgridinp}"
+
+  if [ $SLG = .true. ] ; then
+    MED_INPUT=${DATADIR}/MED_NEMS_SLG_v002/${nemsgrid}${nemsgridinp}
+  else
+    MED_INPUT=${DATADIR}/MED_NEMS_v002/${nemsgrid}${nemsgridinp}
+  fi
+  echo "NEMSCompsetRun setup_med_nems MED_INPUT = ${MED_INPUT}"
+
+  cp -pf ${MED_INPUT}/* ${RUNDIR}
+  echo  "...done."
+}
+
+setup_med_nems(){
+  echo "setup_med_nems ... "
+  VERSION=03
+  SV=${VERSION}.0
+  if [ -n "$V_FILES_MED" ] ; then
+    SV=${V_FILES_MED}
+  fi
+  MED_INPUT=${DATADIR}/MED_NEMS/V${VERSION}/${NEMS_CASE}/${NEMS_GRID}/V${SV}
+  echo "NEMSCompsetRun setup_med_nems MED_INPUT = ${MED_INPUT}"
+  cp -pf ${MED_INPUT}/* ${RUNDIR}
+  echo  "...done."
+}
+
+setup_hycom_GLBT0.72(){
+  echo -n "setup_hycom_GLBT0.72 ... "
+  if [ $MACHINE_ID = gaea ] ; then
+    ln -s /ptmp/HycomGLBT0.72DATA/* ${RUNDIR}/.
+  elif [ $MACHINE_ID = theia ] ; then
+    ln -s ${DATADIR}/HYCOM/GLBT0.72DATA/* ${RUNDIR}/.
+  elif [ $MACHINE_ID = yellowstone ] ; then
+    ln -s ${DATADIR}/HYCOM/GLBT0.72DATA/* ${RUNDIR}/.
+  elif [ $MACHINE_ID = wcoss ] ; then
+    ln -s /ptmp/HycomGLBT0.72DATA/* ${RUNDIR}/.
+  elif [ $MACHINE_ID = linux_gnu ] ; then  
+    ln -s /ptmp/HycomGLBT0.72DATA/* ${RUNDIR}/.
+  else
+    echo "unknown machine ... bailing out"
+    exit 1
+  fi
+  ln -s ${RUNDIR}/blkdat.input.new-Alex ${RUNDIR}/blkdat.input
+  echo  "done."
+}
+
+setup_hycom_Core2-0.72(){
+  echo -n "setup_hycom_Core2-0.72 ... "
+  if [ $MACHINE_ID = gaea ] ; then
+    ln -s /ptmp/Core2-0.72DATA/* ${RUNDIR}/.
+  elif [ $MACHINE_ID = theia ] ; then
+    ln -s ${DATADIR}/HYCOM/Core2-0.72DATA/* ${RUNDIR}/.
+  elif [ $MACHINE_ID = yellowstone ] ; then
+    ln -s ${DATADIR}/HYCOM/Core2-0.72DATA/* ${RUNDIR}/.
+  elif [ $MACHINE_ID = wcoss ] ; then
+    ln -s /ptmp/Core2-0.72DATA/* ${RUNDIR}/.
+  elif [ $MACHINE_ID = linux_gnu ] ; then  
+    ln -s /ptmp/Core2-0.72DATA/* ${RUNDIR}/.
+  else
+    echo "unknown machine ... bailing out"
+    exit 1
+  fi
+  echo  "done."
+}
+
+setup_hycom_Core2-1.6(){
+  echo -n "setup_hycom_Core2-1.6 ... "
+  if [ $MACHINE_ID = gaea ] ; then
+    ln -s /ptmp/Core2-1.6DATA/* ${RUNDIR}/.
+  elif [ $MACHINE_ID = theia ] ; then
+    ln -s ${DATADIR}/HYCOM/Core2-1.6DATA/* ${RUNDIR}/.
+  elif [ $MACHINE_ID = yellowstone ] ; then
+    ln -s ${DATADIR}/HYCOM/Core2-1.6DATA/* ${RUNDIR}/.
+  elif [ $MACHINE_ID = wcoss ] ; then
+    ln -s /ptmp/Core2-1.6DATA/* ${RUNDIR}/.
+  elif [ $MACHINE_ID = linux_gnu ] ; then  
+    ln -s /ptmp/Core2-1.6DATA/* ${RUNDIR}/.
+  else
+    echo "unknown machine ... bailing out"
+    exit 1
+  fi
+  echo  "done."
+}
+
+setup_mom5_old(){
+  ocngrid="nx1"
+  inpversion=""
+  echo "NEMS_GRID = $NEMS_GRID"
+  if [ -n "$NEMS_GRID" ] ; then
+    if [[ $NEMS_GRID = *nx1* ]] ; then
+      ocngrid="nx1"
+    elif [[ $NEMS_GRID = *mx5* ]] ; then
+      ocngrid="mx5"
+      inpversion="C"
+    fi
+  fi
+  #echo "NEMSCompsetRun ocngrid = ${ocngrid}"
+  #echo "NEMSCompsetRun ocn inpversion = ${inpversion}"
+
+  if [ $MACHINE_ID = gaea ] ; then
+    OCN_INPUT=/lustre/f1/unswept/ncep/Gerhard.Theurich/global_box1/INPUT
+  elif [ $MACHINE_ID = theia ] ; then
+    OCN_INPUT=${DATADIR}/MOM/${ocngrid}${inpversion}/INPUT
+  elif [ $MACHINE_ID = yellowstone ] ; then
+    OCN_INPUT=${DATADIR}/MOM/${ocngrid}${inpversion}/INPUT
+  elif [ $MACHINE_ID = wcoss ] ; then
+    OCN_INPUT=${DATADIR}/MOM/${ocngrid}${inpversion}/INPUT
+  fi
+  echo "NEMSCompsetRun setup_mom OCN_INPUT = ${OCN_INPUT}"
+
+  dst_dir="${RUNDIR}"
+  cp -r ${OCN_INPUT}/ ${dst_dir}
+  cp ${OCN_INPUT}/input.nml ${dst_dir}
+#  cp ${OCN_INPUT}/diag_table ${dst_dir}
+  cp ${OCN_INPUT}/diag_table.1hr ${dst_dir}/diag_table
+  if [ $FHOUT = 6 ] ; then
+    cp ${OCN_INPUT}/diag_table.6hr ${dst_dir}/diag_table
+  fi
+  cp ${OCN_INPUT}/field_table ${dst_dir}
+  cp ${OCN_INPUT}/data_table ${dst_dir}
+  mkdir ${dst_dir}/RESTART
+}
+
+setup_mom5(){
+  echo "setup_mom5 ... "
+  VERSION=01
+  SV=${VERSION}.0
+  if [ -n "$V_FILES_MOM5" ] ; then
+    SV=${V_FILES_MOM5}
+  fi
+  if [ -n "$NEMS_GRID" ] ; then
+    if [[ $NEMS_GRID = *mom5%0.5* ]] ; then
+      OCN_GRID=mom5%0.5
+    fi
+  fi
+  OCN_INPUT=${DATADIR}/MOM5/V${VERSION}/${NEMS_CASE}/${OCN_GRID}/V${SV}
+  echo "NEMSCompsetRun setup_mom5 OCN_INPUT = ${OCN_INPUT}"
+  mkdir ${RUNDIR}/INPUT
+  cp -pf ${OCN_INPUT}/* ${RUNDIR}/INPUT
+  cp ${OCN_INPUT}/input.nml ${RUNDIR}
+  cp ${OCN_INPUT}/diag_table.1hr ${RUNDIR}/diag_table
+  if [ $FHOUT = 6 ] ; then
+    cp ${OCN_INPUT}/diag_table.6hr ${RUNDIR}/diag_table
+  fi
+  cp ${OCN_INPUT}/field_table ${RUNDIR}
+  cp ${OCN_INPUT}/data_table ${RUNDIR}
+  mkdir ${RUNDIR}/RESTART
+  echo  "...done."
+}
+setup_sis2(){
+  echo "setup_sis2 ... "
+  VERSION=01
+  SV=${VERSION}.0
+  if [ -n "$V_FILES_SIS2" ] ; then
+    SV=${V_FILES_SIS2}
+  fi
+  if [ -n "$NEMS_GRID" ] ; then
+    if [[ $NEMS_GRID = *cice%0.5* ]] ; then
+      OCN_GRID=mom5%0.5
+    fi
+  fi
+  OCN_INPUT=${DATADIR}/MOM5/V${VERSION}/${NEMS_CASE}/${OCN_GRID}/V${SV}
+  echo "NEMSCompsetRun setup_sis2 OCN_INPUT = ${OCN_INPUT}"
+  mkdir ${RUNDIR}/INPUT
+  cp -pf ${OCN_INPUT}/* ${RUNDIR}/INPUT
+  cp ${OCN_INPUT}/input.nml ${RUNDIR}
+  cp ${OCN_INPUT}/diag_table.1hr ${RUNDIR}/diag_table
+  if [ $FHOUT = 6 ] ; then
+    cp ${OCN_INPUT}/diag_table.6hr ${RUNDIR}/diag_table
+  fi
+  cp ${OCN_INPUT}/field_table ${RUNDIR}
+  cp ${OCN_INPUT}/data_table ${RUNDIR}
+  mkdir ${RUNDIR}/RESTART
+  echo  "...done."
+}
+
+setup_cice_old(){
+  icegrid="nx1"
+  inpversion=""
+  echo "NEMS_GRID = $NEMS_GRID"
+  if [ -n "$NEMS_GRID" ] ; then
+    if [[ $NEMS_GRID = *nx1* ]] ; then
+      icegrid="nx1"
+    elif [[ $NEMS_GRID = *mx5* ]] ; then
+      icegrid="mx5"
+      inpversion="D"
+    fi
+  fi
+  #echo "NEMSCompsetRun icegrid = ${icegrid}"
+  #echo "NEMSCompsetRun ice inpversion = ${inpversion}"
+
+  if [ $MACHINE_ID = gaea ] ; then
+    ICE_INPUT=/lustre/f1/unswept/ncep/Gerhard.Theurich/lanl_cice_data
+  elif [ $MACHINE_ID = theia ] ; then
+    ICE_INPUT=${DATADIR}/CICE/${icegrid}${inpversion}
+  elif [ $MACHINE_ID = yellowstone ] ; then
+    ICE_INPUT=${DATADIR}/CICE/${icegrid}${inpversion}
+  elif [ $MACHINE_ID = wcoss ] ; then
+    ICE_INPUT=${DATADIR}/CICE/${icegrid}${inpversion}
+  fi
+  echo "NEMSCompsetRun setup_cice ICE_INPUT = ${ICE_INPUT}"
+
+  dst_dir="${RUNDIR}"
+  cp -f ${ICE_INPUT}/* ${dst_dir}
+
+  if [ $SLG = .true. ] ; then
+    cp -f ${ICE_INPUT}/ice_in_${icegrid}_slg ${dst_dir}/ice_in
+  else
+    cp -f ${ICE_INPUT}/ice_in_${icegrid} ${dst_dir}/ice_in
+  fi
+
+  mkdir ${dst_dir}/restart
+  mkdir ${dst_dir}/history
+}
+
+setup_cice(){
+  echo "setup_cice ... "
+  VERSION=01
+  SV=${VERSION}.0
+  if [ -n "$V_FILES_CICE" ] ; then
+    SV=${V_FILES_CICE}
+  fi
+  if [ -n "$NEMS_GRID" ] ; then
+    if [[ $NEMS_GRID = *cice%0.5* ]] ; then
+      ICE_GRID=cice%0.5
+    fi
+  fi
+  ICE_INPUT=${DATADIR}/CICE/V${VERSION}/${NEMS_CASE}/${ICE_GRID}/V${SV}
+  echo "NEMSCompsetRun setup_cice ICE_INPUT = ${ICE_INPUT}"
+  cp -pf ${ICE_INPUT}/* ${RUNDIR}
+  if [ $SLG = .true. ] ; then
+    cp -f ${ICE_INPUT}/ice_in_slg ${RUNDIR}/ice_in
+  else
+    cp -f ${ICE_INPUT}/ice_in ${RUNDIR}/ice_in
+  fi
+  mkdir ${RUNDIR}/restart
+  mkdir ${RUNDIR}/history
+  echo  "...done."
+}
+
+setup_ipe(){
+  # this implementation assumes that IPE is right under ROOTDIR
+  ln -s ${ROOTDIR}/IPE/IPE.inp ${RUNDIR}/.
+  ln -s ${ROOTDIR}/IPE/SMSnamelist ${RUNDIR}/.
+  ln -s ${ROOTDIR}/IPE/coeff_hflux.dat ${RUNDIR}/.
+  ln -s ${ROOTDIR}/IPE/coeff_lflux.dat ${RUNDIR}/.
+  ln -s ${ROOTDIR}/IPE/wei96.cofcnts ${RUNDIR}/.
+  if [ $MACHINE_ID = gaea ] ; then
+    ln -s /lustre/f1/unswept/ncep/Gerhard.Theurich/IPEdata/data/stup* ${RUNDIR}/.
+    ln -s /lustre/f1/unswept/ncep/Gerhard.Theurich/IPEdata/data/ipe_grid ${RUNDIR}/.
+  elif [ $MACHINE_ID = theia ] ; then
+    ln -s /scratch3/NCEPDEV/swpc/noscrub/Naomi.Maruyama/ipe/grid/apex/1/GIP_apex_coords_global_lowres_new20120705 ${RUNDIR}/ipe_grid
+    ln -s /scratch3/NCEPDEV/swpc/noscrub/Naomi.Maruyama/ipe/runs/tmp20150730/trunk/run/1445014793_ipe_theia_intel_parallel_80/stup* ${RUNDIR}/.
+  elif [ $MACHINE_ID = yellowstone ] ; then
+    ln -s /glade/u/home/naomi/work/ipe/IPEDATA/data/stup* ${RUNDIR}/.
+    ln -s /glade/u/home/naomi/work/ipe/IPEDATA/data/ipe_grid ${RUNDIR}/.
+  fi
+}
+
+setup_spaceweather(){
+  if [ $MACHINE_ID = gaea ] ; then
+    ln -s /lustre/f1/unswept/ncep/Gerhard.Theurich/SpaceWeatherResources/data ${RUNDIR}/.
+  elif [ $MACHINE_ID = theia ] ; then
+    ln -s /scratch4/NCEPDEV/nems/noscrub/Gerhard.Theurich/SpaceWeatherResources/data ${RUNDIR}/.
+  elif [ $MACHINE_ID = yellowstone ] ; then
+    ln -s /glade/p/work/theurich/SpaceWeatherResources/data ${RUNDIR}/.
+  fi
+}
+
+# ##############################################################################
+# function: link_wrfhydro
+# 1. Link in every file from the wrfhydro run data directory
+# 2. Static copy of hydro.namelist and namelist.hrldas files
+# ##############################################################################
+
+link_wrfhydro(){
+  echo "${FUNCNAME[0]}"
+  if [ "$#" -ne 1 ]; then
+    echo "  ERROR FUNCTION USAGE: ${FUNCNAME[0]} [Hydro directory]"
+    return 1
+  fi
+
+  local HYDRODIR="$1"
+
+  if [ ! -d "$HYDRODIR" ] ; then
+    echo "  ERROR: Hydro directory is missing: [$HYDRONMLST]"
+    return 1
+  fi
+
+  echo "  Hydro directory: $HYDRODIR"
+  ln -fs "$HYDRODIR/*" ${RUNDIR}/.
+  cp "$HYDRODIR/hydro.namelist" ${RUNDIR}/hydro.namelist
+  cp "$HYDRODIR/namelist.hrldas" ${RUNDIR}/namelist.hrldas
+}
+
+# ##############################################################################
+# function: setup_wrfhydro
+# 1. Copy the hydro.namelist and namelist.hrldas files to the run directory
+# 2. Link hydro input files based on hydro.namelist if the full path
+#    is not specified in namelist file
+# 3. Link parameters files to run directory 
+# 4. Link hrldas input files based on namelist.hrldas if the full path
+#    is not specified in the namelist file
+# ##############################################################################
+
+setup_wrfhydro(){
+  echo "${FUNCNAME[0]}"
+  if [ "$#" -ne 3 ]; then
+    echo "  ERROR FUNCTION USAGE: ${FUNCNAME[0]} [Hydro namelist file] [Parameters directory] [HRLDAS namelist file]"
+    return 1
+  fi
+
+  local HYDRONMLST="$1"
+  local PARAMSDIR="$2"
+  local HRLDASNMLST="$3"
+  local HYDRONMLSTDIR=`dirname "$HYDRONMLST"`
+  local HRLDASNMLSTDIR=`dirname "$HRLDASNMLST"`
+
+  if [ ! -e "$HYDRONMLST" ] ; then
+    echo "  ERROR: Hydro namelist file is missing: [$HYDRONMLST]"
+    return 1
+  fi
+  if [ ! -d "$PARAMSDIR" ] ; then
+    echo "  ERROR: Parameters directory is missing: [$PARAMSDIR]"
+    return 1
+  fi
+  if [ ! -e "$HRLDASNMLST" ] ; then
+    echo "  ERROR: HRLDAS namelist file is missing: [$HRLDASNMLST]"
+    return 1
+  fi
+
+  echo "  Hydro namelist file: $HYDRONMLST"
+  echo "  HRLDAS namelist file: $HRLDASNMLST"
+  echo "  Parameters directory: $PARAMSDIR"
+  cp "$HYDRONMLST" ${RUNDIR}/hydro.namelist
+  cp "$HRLDASNMLST" ${RUNDIR}/namelist.hrldas
+
+  HYDROOPTIONS=( \
+    "GEO_STATIC_FLNM" \
+    "GEO_FINEGRID_FLNM" \
+    "gwbasmskfil")
+
+  for OPTION in "${HYDROOPTIONS[@]}"
+  do
+    local LINK=`grep -i "$OPTION" "$HYDRONMLST" | sed "s/^.*$OPTION[ \t]*=[ \t]*//" | tr -d '"' | tr -d "'"`
+    if [[ ! $LINK == /* ]]; then
+      LINK=${LINK/#.\//""}
+      LINK=${LINK%%\/*}
+      ln -fs "$HYDRONMLSTDIR/$LINK" ${RUNDIR}/.
+      # echo "    Symbolic link created [$OPTION $LINK]"
+    fi
+  done
+
+  PARAMSLIST=( \
+    "CHANPARM.TBL" \
+    "GENPARM.TBL" \
+    "LAKEPARM.TBL" \
+    "SOILPARM.TBL" \
+    "VEGPARM.TBL" \
+    "DISTR_HYDRO_CAL_PARMS.TBL" \
+    "GWBUCKPARM.TBL" \
+    "HYDRO.TBL" \
+    "MPTABLE.TBL" \
+    "RGBRAIN.txt" \
+    "URBPARM.TBL")
+
+  for FILE in "${PARAMSLIST[@]}"
+  do
+    ln -fs "$PARAMSDIR/$FILE" ${RUNDIR}/.
+    # echo "    Symbolic link created [$FILE]"
+  done
+
+  HRLDASOPTIONS=( \
+    "HRLDAS_CONSTANTS_FILE" \
+    "INDIR" \
+    "GEO_STATIC_FLNM")
+
+  for OPTION in "${HRLDASOPTIONS[@]}"
+  do
+    local LINK=`grep -i "$OPTION" "$HRLDASNMLST" | sed "s/^.*$OPTION[ \t]*=[ \t]*//" | tr -d '"' | tr -d "'"`
+    if [[ ! $LINK == /* ]]; then
+      LINK=${LINK/#.\//""}
+      LINK=${LINK%%\/*}
+      ln -fs "$HRLDASNMLSTDIR/$LINK" ${RUNDIR}/.
+      # echo "    Symbolic link created [$OPTION $LINK]"
+    fi
+  done
+}
+
+# ##############################################################################
+# function: link_lis
+# 1. Link in every file from the lis run data directory
+# 2. Static copy of lis.config file
+# ##############################################################################
+
+link_lis(){
+  echo "${FUNCNAME[0]}"
+  if [ "$#" -ne 1 ]; then
+    echo "  ERROR FUNCTION USAGE: ${FUNCNAME[0]} [LIS directory]"
+    return 1
+  fi
+
+  local LISDIR="$1"
+
+  if [ ! -d "$LISDIR" ] ; then
+    echo "  ERROR: LIS directory is missing: [$HYDRONMLST]"
+    return 1
+  fi
+
+  echo "  LIS directory: $LISDIR"
+  ln -fs "$LISDIR/*" ${RUNDIR}/.
+  cp "$LISDIR/lis.config" ${RUNDIR}/lis.config
+}
+
+# ##############################################################################
+# function: setup_lis
+# 1. Copy the lis.config file to the run directory
+# 2. Link input files based on lis.config file if full path
+#    is not specified in lis.config file
+# ##############################################################################
+
+setup_lis(){
+  echo "${FUNCNAME[0]}"
+  if [ "$#" -ne 1 ]; then
+    echo "  ERROR FUNCTION USAGE: ${FUNCNAME[0]} [LIS configuration file]"
+    return 1
+  fi
+
+  local LISCONFIG="$1"
+  local CONFIGDIR=`dirname "$LISCONFIG"`
+
+  if [ ! -e "$LISCONFIG" ] ; then
+    echo "  ERROR: LIS configuration file is missing: [$LISCONFIG]"
+    return 1
+  fi
+
+  echo "  LIS configuration file: $LISCONFIG"
+  cp "$LISCONFIG" ${RUNDIR}/lis.config
+
+  # Here is the array of lis.config options to be linked
+  CONFIGOPTIONS=( \
+    "Forcing variables list file:" \
+    "Model output attributes file:" \
+    "LIS domain and parameter data file:" \
+    "vegetation parameter table:" \
+    "soil parameter table:" \
+    "general parameter table:" \
+    "forcing directory:")
+
+  for OPTION in "${CONFIGOPTIONS[@]}"
+  do
+    local LINK=`grep -i "$OPTION" "$LISCONFIG" | sed "s/^.*$OPTION[ \t]*//" | tr -d '"'`
+    if [[ ! $LINK == /* ]]; then
+      LINK=${LINK/#.\//""}
+      LINK=${LINK%%\/*}
+      ln -fs "$CONFIGDIR/$LINK" ${RUNDIR}/.
+      # echo "    Symbolic link created [$OPTION $LINK]"
+    fi
+  done
+}
+
+setup_ww3Case1(){
+  if [ $MACHINE_ID = theia ] ; then
+    cp -r ${DATADIR}/WW3/Case1_20160412/* ${RUNDIR}/.
+  fi
+}
+
+setup_ww3Case2(){
+  if [ $MACHINE_ID = theia ] ; then
+    cp -r ${DATADIR}/WW3/Case2_20160412/* ${RUNDIR}/.
+  fi
+}
+
+setup_ww3Case3(){
+  if [ $MACHINE_ID = theia ] ; then
+    cp -r ${DATADIR}/WW3/Case3_20160412/* ${RUNDIR}/.
+  fi
+}
+
+setup_ww3Case6(){
+  if [ $MACHINE_ID = theia ] ; then
+    cp -r /scratch4/NCEPDEV/nems/noscrub/Jessica.Meixner/esmf_files/Case6_20160328/* ${RUNDIR}/.
+  fi
+}
+
+# -------------- script main --------------
+
+echo "========================================================================="
+
+# Initialize
+ROOTDIR=`pwd`
+NEMSDIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+export PATHCS=${NEMSDIR}/compsets             # Path to compsets directory
+export PATHTR=${NEMSDIR}                      # Path to NEMS trunk
+export PATHRT=${NEMSDIR}/tests                # Path to NEMS test scripts
+
+# Two variables used by the rt_gfs.sh and rt_nmm.sh scripts
+export CREATE_BASELINE=false
+export BAIL_CONDITION=NONE
+
+# Determine the MACHINE_ID variable, used locally and in rt_gfs.sh
+source $PATHTR/tests/detect_machine.sh
+export MACHINE_ID=${MACHINE_ID:-wcoss}
+
+if [ $MACHINE_ID = wcoss ]; then
+  source /usrx/local/Modules/default/init/sh
+  export DATADIR=/climate/noscrub/emc.climpara/NEMS-Data
+
+  # export QUEUE=debug
+  # export QUEUE=dev
+  export QUEUE=devhigh
+  # export ACCNR=dev
+  if [ $pex -eq 2 ] ; then     # pex comes from detect_machine
+   export QUEUE=debug2
+   # export QUEUE=dev2
+   # export ACCNR=dev2
+   export TPN=24
+   #export TASKS=48  ; export PE1=48
+  fi
+  export STMP=/stmpp$pex
+  export PTMP=/ptmpp$pex
+
+  export SCHEDULER=lsf
+  export SIGHDR=/nwprod/exec/global_sighdr
+  export SLG=.false.
+
+  cp $PATHRT/gfs_fcst_run.IN_IBM $PATHRT/gfs_fcst_run.IN
+  cp $PATHRT/gfs_bsub.IN_wcoss $PATHRT/gfs_bsub.IN
+  cp $PATHRT/nmm_conf/nmm_bsub.IN_wcoss $PATHRT/nmm_conf/nmm_bsub.IN
+  export RTPWD=$DATADIR/RT-Baselines
+  export FIXGLOBAL=/global/noscrub/Shrinivas.Moorthi/para_new/para/fix/fix_am
+  export ICS_VERSION=15.0.3
+elif [ $MACHINE_ID = gaea ]; then
+  export DATADIR=/lustre/f1/unswept/ncep/NEMS-Data
+  export CLASS=debug
+  export ACCNR
+  export STMP=/lustre/f1/ncep/$LOGNAME/ptmp
+  export PTMP=/lustre/f1/ncep/$LOGNAME/ptmp
+  export SCHEDULER=moab
+  export SIGHDR=/lustre/f1/unswept/ncep/Shrinivas.Moorthi/para_branch/para_new/sorc/global_sighdr.fd/global_sighdr
+  # -
+  cp $PATHRT/gfs_fcst_run.IN_Linux $PATHRT/gfs_fcst_run.IN
+  export RTPWD=$DATADIR/RT-Baselines
+  export FIXGLOBAL=/lustre/f1/unswept/ncep/Shrinivas.Moorthi/para_branch/para_new/fix/fix_am
+elif [ $MACHINE_ID = theia ]; then
+  export DATADIR=/scratch4/NCEPDEV/nems/noscrub/NEMS-Data
+  export ACCNR=gfdlport
+  # export ACCNR=cmp
+  #export QUEUE=batch
+  export QUEUE=debug
+  export STMP=/scratch4/GFDL/gfdlscr/Niki.Zadeh/tmp
+  export PTMP=/scratch4/GFDL/gfdlscr/Niki.Zadeh/tmp
+#  export STMP=/scratch3/NCEPDEV/stmp1
+#  export PTMP=/scratch3/NCEPDEV/stmp1
+  # export STMP=/scratch3/NCEPDEV/swpc/scrub
+  # export PTMP=/scratch3/NCEPDEV/swpc/scrub
+  export SCHEDULER=pbs
+  export MPIEXEC=mpirun
+  export SIGHDR=/scratch4/NCEPDEV/global/save/Shrinivas.Moorthi/para/sorc/global_sighdr.fd/global_sighdr
+  export SLG=.false.
+  # -
+  cp $PATHRT/gfs_fcst_run.IN_Linux $PATHRT/gfs_fcst_run.IN
+  export RTPWD=$DATADIR/RT-Baselines
+  export FIXGLOBAL=/scratch4/NCEPDEV/global/save/Shrinivas.Moorthi/para/fix/fix_am
+elif [ $MACHINE_ID = yellowstone ]; then
+  export DATADIR=/glade/p/work/theurich/NEMS-Data
+  export ACCNR=P35071400
+  # export ACCNR=UCUB0024
+  export QUEUE=small
+  export STMP=/glade/scratch
+  export PTMP=/glade/scratch
+  export SCHEDULER=lsf
+  export MPIEXEC=mpirun
+  export SIGHDR=/glade/p/work/theurich/para/global_sighdr.fd/global_sighdr
+  export SLG=.false.
+  # -
+  cp $PATHRT/gfs_fcst_run.IN_Linux $PATHRT/gfs_fcst_run.IN
+  cp $PATHRT/gfs_bsub.IN_yellowstone $PATHRT/gfs_bsub.IN
+  cp $PATHRT/nmm_conf/nmm_bsub.IN_yellowstone $PATHRT/nmm_conf/nmm_bsub.IN
+  export RTPWD=$DATADIR/RT-Baselines
+  export FIXGLOBAL=/glade/p/work/theurich/para/fix_am
+elif [ $MACHINE_ID = linux_gnu ]; then
+  export DATADIR=/ptmp
+  export PTMP=/ptmp
+  export MPIEXEC=mpirun
+  export SIGHDR=/ptmp/gerhard/para/global_sighdr.fd/global_sighdr
+  export SLG=.false.
+  # -
+  cp $PATHRT/gfs_fcst_run.IN_Linux $PATHRT/gfs_fcst_run.IN
+  cp $PATHRT/gfs_bsub.IN_yellowstone $PATHRT/gfs_bsub.IN
+  cp $PATHRT/nmm_conf/nmm_bsub.IN_yellowstone $PATHRT/nmm_conf/nmm_bsub.IN
+  export RTPWD=/ptmp/gerhard/REGRESSION_TEST_NUOPC_development_v0020
+  export FIXGLOBAL=/ptmp/gerhard/para/fix_am
+else
+  echo "Unknown machine ID: " $MACHINE_ID
+  echo "Must edit file '$PATHTR/tests/detect_machine.sh'"
+  echo "and/or '$PATHTR/NEMSCompsetRun'."
+  echo "...bailing out!"
+  exit 1    
+fi
+
+echo "========================================================================="
+
+# Make the RUNDIR_ROOT on the temporary file system
+export RUNDIR_ROOT=${PTMP}/${USER}/rt_$$
+mkdir -p ${RUNDIR_ROOT}
+
+echo "RUNDIR_ROOT: '${RUNDIR_ROOT}'"
+
+export TEST_NR=""
+export REGRESSIONTEST_LOG=${PATHRT}/RegressionTests_$MACHINE_ID.log
+
+echo "========================================================================="
+
+# Determine file that contains the list of compsets
+if ([ $# == 0 ]); then
+  compsetfileCounter=0
+  shopt -s nullglob # all expansion to null string
+  for i in $ROOTDIR/*.compsetRun; do
+    if [ "x$i" != "x" ]; then
+      let compsetfileCounter++
+      compsetfilelist=( "${compsetfilelist[@]}" $i )
+    fi
+  done
+  if [ $compsetfileCounter == 0 ]; then
+    file=$PATHCS/"default.compsetRun"
+  else
+    file=${compsetfilelist[0]}
+  fi
+  echo "Looping through the compset list in file '$file'..."
+elif ([ $# == 1 ]); then
+  file=$1
+  echo "Looping through the compset list in file '$file'..."
+elif ([ $# == 2 ]); then
+  file=$1
+  if [ "$file" == "-compset" ]; then
+    compsets="$2"
+    echo "Single compset: '$2'..."
+    # default
+    compsetdir=$ROOTDIR
+  else
+    echo "Usage: ./NEMSCompsetRun [FILE]"
+    echo "  Where FILE contains a list of compsets to be run, one compset per line."
+    echo "  Without FILE the default configuration in file 'default.compsetRun' "
+    echo "  in subdir ./compsets in the NEMS root directory is used."
+    echo "OR:    ./NEMSCompsetRun -compset [COMPSET]"
+    echo "  Where COMPSET is an existing compset."
+    echo "...bailing out!"
+    exit 1
+  fi
+else
+  echo "Usage: ./NEMSCompsetRun [FILE]"
+  echo "  Where FILE contains a list of compsets to be run, one compset per line."
+  echo "  Without FILE the default configuration in file 'default.compsetRun' "
+  echo "  in subdir ./compsets in the NEMS root directory is used."
+  echo "OR:    ./NEMSCompsetRun -compset [COMPSET]"
+  echo "  Where COMPSET is an existing compset."
+  echo "...bailing out!"
+  exit 1
+fi
+
+if [ "$file" != "-compset" ]; then
+  # Ensure the file exists
+  if ([ ! -f $file ]); then
+    echo "The file '$file' does not exist!"
+    echo "...bailing out!"
+    exit 1
+  fi
+
+  # Construct a list variable of compsets, skip comments
+  compsets=`cat $file | grep -v '^#'| grep -v '^DIR=' | awk '{ print $1 }' | xargs`
+  echo $compsets
+
+  # Look for DIR variable in the file
+  compsetdir=`cat $file | grep -e '^DIR=' | tail -1 | sed 's/DIR=//g'`
+  if ([ $compsetdir"x" == "x" ]); then
+    # default
+    compsetdir=$PATHCS
+  fi
+fi
+  
+echo "Looking for compsets in directory: '$compsetdir'."
+
+echo "========================================================================="
+
+# Loop over the list of compsets
+echo "Starting :" > $REGRESSIONTEST_LOG
+date >> $REGRESSIONTEST_LOG
+i=0
+for compset in $compsets; do
+  echo "======================================================================"
+  echo "======================================================================"\
+  >> $REGRESSIONTEST_LOG
+  echo "Setting up to run NEMS on compset: '$compset'."
+  echo "Setting up to run NEMS on compset: '$compset'." >> $REGRESSIONTEST_LOG
+  if ([ -f $compsetdir/$compset ]); then
+    echo "Found compset file '$compsetdir/$compset'."
+    export RUNDIR=${RUNDIR_ROOT}/$compset
+    mkdir -p ${RUNDIR}
+    let i++
+    export JBNME=`basename $RUNDIR_ROOT`_$i
+    unset IC_DIR
+    unset passive_tracer
+    source $compsetdir/$compset
+    echo "RUNDIR: '$RUNDIR'."
+    echo "RUNDIR: '$RUNDIR'." >> $REGRESSIONTEST_LOG
+    cd $PATHRT
+    ./${RUN_SCRIPT} || echo "... detected problems!!!"
+  else
+    echo "Did NOT find compset file '$compsetdir/$compset'."
+    echo "...bailing out!"
+    exit 1
+  fi
+done
+echo "======================================================================"
+echo "======================================================================"\
+>> $REGRESSIONTEST_LOG
+date >> $REGRESSIONTEST_LOG

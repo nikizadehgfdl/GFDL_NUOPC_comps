@@ -1,0 +1,7 @@
+# ESMF self-describing build dependency makefile fragment
+# src location Zeus: wd
+
+ESMF_DEP_FRONT     = mom_cap_mod
+ESMF_DEP_INCPATH   = /scratch4/GFDL/gfdlscr/Niki.Zadeh/NEMS/UGCS-Seasonal0.2.DREV80567.sis2/trunk/GFDLcomps-INSTALL/MOM5
+ESMF_DEP_CMPL_OBJS = 
+ESMF_DEP_LINK_OBJS = /scratch4/GFDL/gfdlscr/Niki.Zadeh/NEMS/UGCS-Seasonal0.2.DREV80567.sis2/trunk/GFDLcomps-INSTALL/MOM5/libmom5_cap.a /scratch4/GFDL/gfdlscr/Niki.Zadeh/NEMS/UGCS-Seasonal0.2.DREV80567.sis2/trunk/GFDLcomps-INSTALL/MOM5/libMOM5.a /scratch4/GFDL/gfdlscr/Niki.Zadeh/NEMS/UGCS-Seasonal0.2.DREV80567.sis2/trunk/GFDLcomps-INSTALL/MOM5/libFMS.a

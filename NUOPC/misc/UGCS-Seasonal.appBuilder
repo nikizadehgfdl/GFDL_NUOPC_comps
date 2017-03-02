@@ -1,0 +1,54 @@
+# Climate Forecast System
+#
+## UGCS-Seasonal NEMS Application Builder file
+
+COMPONENTS=( GSM SIS2 MOM5 WW3 )
+
+# SIS2
+SIS2_SRCDIR=$ROOTDIR/GFDLcomps
+SIS2_BINDIR=$ROOTDIR/GFDLcomps-INSTALL/SIS2
+
+# MOM5
+MOM5_SRCDIR=$ROOTDIR/GFDLcomps
+MOM5_BINDIR=$ROOTDIR/GFDLcomps-INSTALL/MOM5
+
+# WW3
+WW3_SRCDIR=$ROOTDIR/WW3
+WW3_BINDIR=$ROOTDIR/WW3-INSTALL
+
+# Gaea environment
+environment_gaea(){
+  source /etc/profile
+  module use ~Gerhard.Theurich/Modulefiles
+  module swap PrgEnv-pgi PrgEnv-intel
+  module load cray-netcdf esmf/7.0.0
+}
+
+# Theia environment
+environment_theia(){
+  source /etc/profile
+  module use /scratch4/NCEPDEV/nems/save/Gerhard.Theurich/Modulefiles
+  module load intel impi/5.1.1.109 netcdf esmf/7.1.0bs05-IMPI5.1.1.109
+}
+
+# Yellowstone environment
+environment_yellowstone(){
+  source /etc/profile
+  module purge
+  module load ncarenv/1.0 ncarbinlibs/1.1 intel/15.0.0 ncarcompilers/1.0 netcdf/4.3.0 mkl/11.1.2 impi/4.0.3.008
+  export ESMFMKFILE=~theurich/ESMF-INSTALLS/710bs05-Intel15.0.0-IMPI4.0.3.008-NetCDF4.3.0/lib/esmf.mk
+}
+
+# WCOSS environment
+environment_wcoss(){
+
+  # For CICE comp_ice.backend
+  export IO_TYPE=netcdf4
+  # export IO_TYPE=netcdf3
+
+  source /etc/profile
+  module purge
+
+  module use /nems/save/Patrick.Tripp/modulefiles
+  module load ics/15.0.3  ibmpe  NetCDF/4.2/serial  lsf  esmf/7.1.0bs5
+}

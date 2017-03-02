@@ -1,0 +1,8 @@
+setenv NC_BLKSZ        64K 
+setenv FMS_ARCHIVE     /home/Fei.Liu/fms
+setenv PATH            ${PATH}:.
+setenv netcdf_inc_dir  "/apps/netcdf/3.6.3/intel/include"
+setenv netcdf_lib_dir  "-L/apps/netcdf/3.6.3/intel/lib -lnetcdf_c++ -lnetcdf"
+setenv netcdf3_inc_dir "/apps/netcdf/3.6.3/intel/include"
+setenv netcdf3_lib_dir "-L/apps/netcdf/3.6.3/intel/lib -lnetcdf_c++ -lnetcdf"
+setenv mpirunCommand   "/apps/mpt/2.05/bin/mpiexec_mpt"

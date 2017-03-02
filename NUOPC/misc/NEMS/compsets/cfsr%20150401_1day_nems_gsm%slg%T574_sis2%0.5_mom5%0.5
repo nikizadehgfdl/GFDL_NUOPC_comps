@@ -1,0 +1,292 @@
+###############################################################################
+#                   SIS2
+#                     | 900s
+# TEST   - GSM <-> Mediator <-> MOM5
+#        -    900s         1800s    coupling interval
+#        - Exchanging Fields
+#        - Starting at 2015040100, running for 1 day
+#
+###############################################################################
+
+export TEST_DESCR="NUOPC: SLG GSM <-900s-> MED <-900s-> SIS2 <-900s-> MED <-1800s-> MOM5 ... 1 day"
+
+# - NEMS configuration ---
+export NEMS_CASE=cfsr%20150401
+export NEMS_GRID=gsm%slg%T574_cice%0.5_mom5%0.5
+
+# - gsm configuration ---
+export_gsm
+export IC_DIR=$DATADIR/GSM/T574_CFSR_mask%0.5
+export TASKS=216
+export WLCLK=30
+export CDATE=2015040100
+export NDAYS=1
+export wave=574
+export lm=64
+export lsoil=4
+export isoil=4
+export FHZER=1
+export FHOUT=1
+# export FHROT=0
+export FHOUT_HF=1
+export FHMAX_HF=0
+export DELTIM=900
+
+export SLG=.true.
+export ADIABATIC=.false.
+export IAER=111
+export CPLFLX=.true.
+export A2OI_OUT=.false.
+
+# I/O options: I/O combo, all NEMSIO
+export NEMSIOIN=.true.
+export NEMSIOOUT=.true.
+export SIGIOIN=.false.
+export SIGIOOUT=.false.
+export SFCIOOUT=.false.
+
+export WTPG=1
+export WRTGP=1
+export WRITE_DOPOST=.false.
+export POST_GRIBVERSION=.false.
+export GOCART_AER2POST=.false.
+export NSOUT=0
+# export QUILT=.true.
+export QUILT=.false.
+
+export MEMBER_NAMES=c00
+export CP2=.false.
+# export FDFI=3
+export FDFI=0
+# export LDFI_SPECT=.true.
+export LDFI_SPECT=.false.
+# T574 below
+export LONR=1152
+export LATR=576
+export fcyc=24
+export ENS_SPS=.false.
+export REDUCEDGRID=.true.
+export NST_FCST=0
+export GOCART=0
+export passive_tracer=NO
+export SFCPRESS_ID=1
+export THERMODYN_ID=1
+export IDVC=2  # the vertical coord - 2 means hybrid
+export IDEA=.false.
+export NDSLFV=.false.
+export SPECTRALLOOP=2
+export IEMS=1
+export ISOL=2
+export ICO2=2
+export RESTART=.false.
+# export FHRES=144
+
+# - nems.configure ---
+export_nems
+export nems_configure=med_atm_ocn_ice
+export ocn_model=mom5
+export ocn_petlist_bounds="0 31"      #32
+export atm_model=gsm
+export atm_petlist_bounds="32 195"    #164
+export ice_model=sis2
+export ice_petlist_bounds="196 215"   #20
+export med_model=nems
+export med_petlist_bounds="32 215"    #184
+export coupling_interval_slow_sec=1800.0
+export coupling_interval_fast_sec=900.0
+
+# - component specific setup calls ---
+setup_sis2
+setup_mom5
+setup_med_nems
+
+# - 
+RUN_SCRIPT=rt_gfs.sh
+
+# - validation
+export CNTL_DIR=cfsr%20150401_1day_nems_gsm%slg%T574_sis2%0.5_mom5%0.5_V0006
+export LIST_FILES=" \
+ sigf00 sigf01 sigf02 sigf04 sigf06 sigf12 sigf24 \
+ sfcf00 sfcf01 sfcf02 sfcf04 sfcf06 sfcf12 sfcf24 \
+ flxf00 flxf01 flxf02 flxf04 flxf06 flxf12 flxf24 "
+LIST_FILES+=" \
+ init_field_ocn_export_freezing_melting_potential.nc              \
+ init_field_ocn_export_ocean_mask.nc                              \
+ init_field_ocn_export_ocn_current_merid.nc                       \
+ init_field_ocn_export_ocn_current_zonal.nc                       \
+ init_field_ocn_export_sea_lev.nc                                 \
+ init_field_ocn_export_sea_surface_temperature.nc                 \
+ init_field_ocn_export_s_surf.nc                                  \
+ mediator_FBaccumAtmOcn_restart.nc                                \
+ mediator_FBaccumAtm_restart.nc                                   \
+ mediator_FBaccumIce_restart.nc                                   \
+ mediator_FBaccumOcn_restart.nc                                   \
+ mediator_FBAtm_a_restart.nc                                      \
+ mediator_FBAtmOcn_o_restart.nc                                   \
+ mediator_FBIce_i_restart.nc                                      \
+ mediator_FBOcn_o_restart.nc                                      "
+LIST_FILES+=" \
+ array_med_atm_grid_area.nc                                       \
+ array_med_atm_grid_coord1.nc                                     \
+ array_med_atm_grid_coord2.nc                                     \
+ array_med_atm_grid_corner1.nc                                    \
+ array_med_atm_grid_corner2.nc                                    \
+ array_med_atm_grid_mask.nc                                       \
+ array_med_ice_grid_area.nc                                       \
+ array_med_ice_grid_coord1.nc                                     \
+ array_med_ice_grid_coord2.nc                                     \
+ array_med_ice_grid_corner1.nc                                    \
+ array_med_ice_grid_corner2.nc                                    \
+ array_med_ice_grid_mask.nc                                       \
+ array_med_med_grid_coord1.nc                                     \
+ array_med_med_grid_coord2.nc                                     \
+ array_med_med_grid_corner1.nc                                    \
+ array_med_med_grid_corner2.nc                                    \
+ array_med_ocn_grid_area.nc                                       \
+ array_med_ocn_grid_coord1.nc                                     \
+ array_med_ocn_grid_coord2.nc                                     \
+ array_med_ocn_grid_corner1.nc                                    \
+ array_med_ocn_grid_corner2.nc                                    \
+ array_med_ocn_grid_mask.nc                                       "
+LIST_FILES+=" \
+ field_med_atm_a_land_mask.nc                                     \
+ field_med_ocn_a_ice_mask.nc                                      \
+ field_med_ocn_a_ocean_mask.nc                                    \
+ field_med_ocn_a_ocnice_mask.nc                                   \
+ fields_med_atmocn.nc                                             "
+LIST_FILES+=" \
+ field_med_from_atm_inst_down_lw_flx.nc                           \
+ field_med_from_atm_inst_down_sw_flx.nc                           \
+ field_med_from_atm_inst_down_sw_ir_dif_flx.nc                    \
+ field_med_from_atm_inst_down_sw_ir_dir_flx.nc                    \
+ field_med_from_atm_inst_down_sw_vis_dif_flx.nc                   \
+ field_med_from_atm_inst_down_sw_vis_dir_flx.nc                   \
+ field_med_from_atm_inst_height_lowest.nc                         \
+ field_med_from_atm_inst_laten_heat_flx.nc                        \
+ field_med_from_atm_inst_merid_moment_flx.nc                      \
+ field_med_from_atm_inst_merid_wind_height10m.nc                  \
+ field_med_from_atm_inst_merid_wind_height_lowest.nc              \
+ field_med_from_atm_inst_net_lw_flx.nc                            \
+ field_med_from_atm_inst_net_sw_flx.nc                            \
+ field_med_from_atm_inst_net_sw_ir_dif_flx.nc                     \
+ field_med_from_atm_inst_net_sw_ir_dir_flx.nc                     \
+ field_med_from_atm_inst_net_sw_vis_dif_flx.nc                    \
+ field_med_from_atm_inst_net_sw_vis_dir_flx.nc                    \
+ field_med_from_atm_inst_pres_height_lowest.nc                    \
+ field_med_from_atm_inst_pres_height_surface.nc                   \
+ field_med_from_atm_inst_sensi_heat_flx.nc                        \
+ field_med_from_atm_inst_spec_humid_height2m.nc                   \
+ field_med_from_atm_inst_spec_humid_height_lowest.nc              \
+ field_med_from_atm_inst_surface_height.nc                        \
+ field_med_from_atm_inst_temp_height2m.nc                         \
+ field_med_from_atm_inst_temp_height_lowest.nc                    \
+ field_med_from_atm_inst_temp_height_surface.nc                   \
+ field_med_from_atm_inst_zonal_moment_flx.nc                      \
+ field_med_from_atm_inst_zonal_wind_height10m.nc                  \
+ field_med_from_atm_inst_zonal_wind_height_lowest.nc              \
+ field_med_from_atm_mean_down_lw_flx.nc                           \
+ field_med_from_atm_mean_down_sw_flx.nc                           \
+ field_med_from_atm_mean_down_sw_ir_dif_flx.nc                    \
+ field_med_from_atm_mean_down_sw_ir_dir_flx.nc                    \
+ field_med_from_atm_mean_down_sw_vis_dif_flx.nc                   \
+ field_med_from_atm_mean_down_sw_vis_dir_flx.nc                   \
+ field_med_from_atm_mean_laten_heat_flx.nc                        \
+ field_med_from_atm_mean_merid_moment_flx.nc                      \
+ field_med_from_atm_mean_net_lw_flx.nc                            \
+ field_med_from_atm_mean_net_sw_flx.nc                            \
+ field_med_from_atm_mean_net_sw_ir_dif_flx.nc                     \
+ field_med_from_atm_mean_net_sw_ir_dir_flx.nc                     \
+ field_med_from_atm_mean_net_sw_vis_dif_flx.nc                    \
+ field_med_from_atm_mean_net_sw_vis_dir_flx.nc                    \
+ field_med_from_atm_mean_prec_rate.nc                             \
+ field_med_from_atm_mean_sensi_heat_flx.nc                        \
+ field_med_from_atm_mean_zonal_moment_flx.nc                      \
+ field_med_from_ice_ice_fraction.nc                               \
+ field_med_from_ice_ice_mask.nc                                   \
+ field_med_from_ice_inst_ice_ir_dif_albedo.nc                     \
+ field_med_from_ice_inst_ice_ir_dir_albedo.nc                     \
+ field_med_from_ice_inst_ice_vis_dif_albedo.nc                    \
+ field_med_from_ice_inst_ice_vis_dir_albedo.nc                    \
+ field_med_from_ice_mean_evap_rate_atm_into_ice.nc                \
+ field_med_from_ice_mean_fresh_water_to_ocean_rate.nc             \
+ field_med_from_ice_mean_ice_volume.nc                            \
+ field_med_from_ice_mean_laten_heat_flx_atm_into_ice.nc           \
+ field_med_from_ice_mean_net_sw_ir_dif_flx.nc                     \
+ field_med_from_ice_mean_net_sw_ir_dir_flx.nc                     \
+ field_med_from_ice_mean_net_sw_vis_dif_flx.nc                    \
+ field_med_from_ice_mean_net_sw_vis_dir_flx.nc                    \
+ field_med_from_ice_mean_salt_rate.nc                             \
+ field_med_from_ice_mean_sensi_heat_flx_atm_into_ice.nc           \
+ field_med_from_ice_mean_snow_volume.nc                           \
+ field_med_from_ice_mean_sw_pen_to_ocn.nc                         \
+ field_med_from_ice_mean_up_lw_flx_ice.nc                         \
+ field_med_from_ice_net_heat_flx_to_ocn.nc                        \
+ field_med_from_ice_sea_ice_temperature.nc                        \
+ field_med_from_ice_stress_on_air_ice_merid.nc                    \
+ field_med_from_ice_stress_on_air_ice_zonal.nc                    \
+ field_med_from_ice_stress_on_ocn_ice_merid.nc                    \
+ field_med_from_ice_stress_on_ocn_ice_zonal.nc                    \
+ field_med_from_ocn_freezing_melting_potential.nc                 \
+ field_med_from_ocn_ocean_mask.nc                                 \
+ field_med_from_ocn_ocn_current_merid.nc                          \
+ field_med_from_ocn_ocn_current_zonal.nc                          \
+ field_med_from_ocn_sea_lev.nc                                    \
+ field_med_from_ocn_sea_surface_temperature.nc                    \
+ field_med_from_ocn_s_surf.nc                                     "
+LIST_FILES+=" \
+ field_med_to_atm_ice_fraction.nc                                 \
+ field_med_to_atm_inst_ice_ir_dif_albedo.nc                       \
+ field_med_to_atm_inst_ice_ir_dir_albedo.nc                       \
+ field_med_to_atm_inst_ice_vis_dif_albedo.nc                      \
+ field_med_to_atm_inst_ice_vis_dir_albedo.nc                      \
+ field_med_to_atm_land_mask.nc                                    \
+ field_med_to_atm_mean_evap_rate.nc                               \
+ field_med_to_atm_mean_laten_heat_flx.nc                          \
+ field_med_to_atm_mean_merid_moment_flx.nc                        \
+ field_med_to_atm_mean_sensi_heat_flx.nc                          \
+ field_med_to_atm_mean_up_lw_flx.nc                               \
+ field_med_to_atm_mean_zonal_moment_flx.nc                        \
+ field_med_to_atm_sea_surface_temperature.nc                      \
+ field_med_to_atm_surface_temperature.nc                          \
+ field_med_to_ice_air_density_height_lowest.nc                    \
+ field_med_to_ice_freezing_melting_potential.nc                   \
+ field_med_to_ice_inst_height_lowest.nc                           \
+ field_med_to_ice_inst_merid_wind_height_lowest.nc                \
+ field_med_to_ice_inst_pres_height_lowest.nc                      \
+ field_med_to_ice_inst_spec_humid_height2m.nc                     \
+ field_med_to_ice_inst_spec_humid_height_lowest.nc                \
+ field_med_to_ice_inst_surface_height.nc                          \
+ field_med_to_ice_inst_temp_height2m.nc                           \
+ field_med_to_ice_inst_temp_height_lowest.nc                      \
+ field_med_to_ice_inst_zonal_wind_height_lowest.nc                \
+ field_med_to_ice_mean_down_lw_flx.nc                             \
+ field_med_to_ice_mean_down_sw_ir_dif_flx.nc                      \
+ field_med_to_ice_mean_down_sw_ir_dir_flx.nc                      \
+ field_med_to_ice_mean_down_sw_vis_dif_flx.nc                     \
+ field_med_to_ice_mean_down_sw_vis_dir_flx.nc                     \
+ field_med_to_ice_mean_fprec_rate.nc                              \
+ field_med_to_ice_mean_merid_moment_flx.nc                        \
+ field_med_to_ice_mean_prec_rate.nc                               \
+ field_med_to_ice_mean_zonal_moment_flx.nc                        \
+ field_med_to_ice_mixed_layer_depth.nc                            \
+ field_med_to_ice_ocn_current_merid.nc                            \
+ field_med_to_ice_ocn_current_zonal.nc                            \
+ field_med_to_ice_sea_lev.nc                                      \
+ field_med_to_ice_sea_surface_slope_merid.nc                      \
+ field_med_to_ice_sea_surface_slope_zonal.nc                      \
+ field_med_to_ice_sea_surface_temperature.nc                      \
+ field_med_to_ice_s_surf.nc                                       \
+ field_med_to_ocn_inst_pres_height_surface.nc                     \
+ field_med_to_ocn_mean_evap_rate.nc                               \
+ field_med_to_ocn_mean_fprec_rate.nc                              \
+ field_med_to_ocn_mean_merid_moment_flx.nc                        \
+ field_med_to_ocn_mean_net_lw_flx.nc                              \
+ field_med_to_ocn_mean_net_sw_ir_dif_flx.nc                       \
+ field_med_to_ocn_mean_net_sw_ir_dir_flx.nc                       \
+ field_med_to_ocn_mean_net_sw_vis_dif_flx.nc                      \
+ field_med_to_ocn_mean_net_sw_vis_dir_flx.nc                      \
+ field_med_to_ocn_mean_prec_rate.nc                               \
+ field_med_to_ocn_mean_salt_rate.nc                               \
+ field_med_to_ocn_mean_sensi_heat_flx.nc                          \
+ field_med_to_ocn_mean_zonal_moment_flx.nc                        "
+

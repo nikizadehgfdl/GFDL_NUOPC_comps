@@ -1,0 +1,14 @@
+### List of UGCS-Seasonal compsets ###
+######################################
+
+#cfsr%20150401_1day_sbys_gsm%slg%T574
+#cfsr%20150401_5day_sbys_gsm%slg%T574
+#cfsr%20150401_1hr_nems%cold_gsm%slg%T574_cice%0.5_mom5%0.5
+cfsr%20150401_1day_nems_gsm%slg%T574_sis2%0.5_mom5%0.5
+#cfsr%20150401_5day_nems_gsm%slg%T574_cice%0.5_mom5%0.5
+#cfsr%20150401_30day_nems_gsm%slg%T574_cice%0.5_mom5%0.5
+
+#cfsr%20150401_1hr_nems%cold_gsm%slg%T126_cice%0.5_mom5%0.5
+#cfsr%20150401_1day_nems_gsm%slg%T126_cice%0.5_mom5%0.5
+#cfsr%20150401_5day_nems_gsm%slg%T126_cice%0.5_mom5%0.5
+#cfsr%20150401_30day_nems_gsm%slg%T126_cice%0.5_mom5%0.5
