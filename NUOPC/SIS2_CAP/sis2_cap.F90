@@ -1,9 +1,9 @@
-!--------------- MOM Ocean model -----------------
-! This is the MOM ocean model cap
+!--------------- SIS2 sea-ice model -----------------
+! This is the SIS2 sea-ice model cap
 !
-! Author:  Fei.Liu@gmail.com
+! Author:  Niki.Zadeh
 !
-! 5/10/13
+! 3/10/17
 !
 
 module sis2_cap_mod
@@ -1051,34 +1051,72 @@ module sis2_cap_mod
     character(len=*),parameter  :: subname='(sis2_cap:SIS_FieldsSetup)'
 
 !--------- import fields to Sea Ice -------------
-    call fld_list_add(fldsToIce_num, fldsToIce, "mean_net_lw_flx"      , "will provide") !, data=atmos_ice_boundary%lw_flux  )
-    !atmos_ice_boundary%u_flux=0.0
-    !atmos_ice_boundary%v_flux=0.0
-    !atmos_ice_boundary%u_star=0.0
-    !atmos_ice_boundary%t_flux=0.0
-    !atmos_ice_boundary%q_flux=0.0
-    !atmos_ice_boundary%lw_flux=0.0
-    !atmos_ice_boundary%sw_flux_vis_dir=0.0
-    !atmos_ice_boundary%sw_flux_vis_dif=0.0
-    !atmos_ice_boundary%sw_flux_nir_dir=0.0
-    !atmos_ice_boundary%sw_flux_nir_dif=0.0
-    !atmos_ice_boundary%lprec=0.0
-    !atmos_ice_boundary%fprec=0.0
-    !atmos_ice_boundary%dhdt=0.0
-    !atmos_ice_boundary%dedt=0.0
-    !atmos_ice_boundary%drdt=0.0
-    !atmos_ice_boundary%coszen=0.0
-    !atmos_ice_boundary%p=0.0
-
-    !ocean_ice_boundary%u=0.0
-    !ocean_ice_boundary%v=0.0
-    !ocean_ice_boundary%t=273.0
-    !ocean_ice_boundary%s=0.0
-    !ocean_ice_boundary%frazil=0.0
-    !ocean_ice_boundary%sea_level=0.0
+    !--from ATM boundary
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_net_lw_flx", "will provide", data=atmos_ice_boundary%lw_flux  )
+    call fld_list_add(fldsToIce_num, fldsToIce, "", "will provide", data=atmos_ice_boundary%u_flux)
+    call fld_list_add(fldsToIce_num, fldsToIce, "", "will provide", data=atmos_ice_boundary%v_flux)
+    call fld_list_add(fldsToIce_num, fldsToIce, "", "will provide", data=atmos_ice_boundary%u_star)
+    call fld_list_add(fldsToIce_num, fldsToIce, "", "will provide", data=atmos_ice_boundary%t_flux)
+    call fld_list_add(fldsToIce_num, fldsToIce, "", "will provide", data=atmos_ice_boundary%q_flux)
+    call fld_list_add(fldsToIce_num, fldsToIce, "", "will provide", data=atmos_ice_boundary%lw_flux)
+    call fld_list_add(fldsToIce_num, fldsToIce, "", "will provide", data=atmos_ice_boundary%sw_flux_vis_dir)
+    call fld_list_add(fldsToIce_num, fldsToIce, "", "will provide", data=atmos_ice_boundary%sw_flux_vis_dif)
+    call fld_list_add(fldsToIce_num, fldsToIce, "", "will provide", data=atmos_ice_boundary%sw_flux_nir_dir)
+    call fld_list_add(fldsToIce_num, fldsToIce, "", "will provide", data=atmos_ice_boundary%sw_flux_nir_dif)
+    call fld_list_add(fldsToIce_num, fldsToIce, "", "will provide", data=atmos_ice_boundary%lprec)
+    call fld_list_add(fldsToIce_num, fldsToIce, "", "will provide", data=atmos_ice_boundary%fprec)
+    call fld_list_add(fldsToIce_num, fldsToIce, "", "will provide", data=atmos_ice_boundary%dhdt)
+    call fld_list_add(fldsToIce_num, fldsToIce, "", "will provide", data=atmos_ice_boundary%dedt)
+    call fld_list_add(fldsToIce_num, fldsToIce, "", "will provide", data=atmos_ice_boundary%drdt)
+    call fld_list_add(fldsToIce_num, fldsToIce, "", "will provide", data=atmos_ice_boundary%coszen)
+    call fld_list_add(fldsToIce_num, fldsToIce, "", "will provide", data=atmos_ice_boundary%p)
+    !--from LND boundary
+    call fld_list_add(fldsToIce_num, fldsToIce, "", "will provide", data=land_ice_boundary%runoff)
+    call fld_list_add(fldsToIce_num, fldsToIce, "", "will provide", data=land_ice_boundary%calving)
+    call fld_list_add(fldsToIce_num, fldsToIce, "", "will provide", data=land_ice_boundary%runoff_hflx)
+    call fld_list_add(fldsToIce_num, fldsToIce, "", "will provide", data=land_ice_boundary%calving_hflx)
+    !--From OCN boundary. These should correspond to fields in OCN export fields.
+    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_zona",           "will provide", data=ocean_ice_boundary%u)
+    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_merid",          "will provide", data=ocean_ice_boundary%v)
+    call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_temperature",    "will provide", data=ocean_ice_boundary%t)
+    call fld_list_add(fldsToIce_num, fldsToIce, "s_surf",                     "will provide", data=ocean_ice_boundary%s)
+    call fld_list_add(fldsToIce_num, fldsToIce, "freezing_melting_potential", "will provide", data=ocean_ice_boundary%frazil)
+    call fld_list_add(fldsToIce_num, fldsToIce, "sea_lev",                    "will provide", data=ocean_ice_boundary%sea_levl)
 
 !--------- export fields from Sea Ice -------------
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_net_lw_flx"      , "will provide") !, data=ice_data%flux_lw  )
+    !--copied the following from cice_cap. Why?
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "sea_ice_temperature"             , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_vis_dir_albedo"         , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dir_albedo"          , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_vis_dif_albedo"         , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dif_albedo"          , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "ice_mask"                        , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "ice_fraction"                    , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_air_ice_zonal"         , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_air_ice_merid"         , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_ocn_ice_zonal"         , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_ocn_ice_merid"         , "will provide")
+!    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_ocn_ice_idir"          , "will provide")
+!    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_ocn_ice_jdir"          , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_sw_pen_to_ocn"              , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_net_sw_vis_dir_flx"         , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_net_sw_vis_dif_flx"         , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_net_sw_ir_dir_flx"          , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_net_sw_ir_dif_flx"          , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_up_lw_flx_ice"              , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_sensi_heat_flx_atm_into_ice", "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_laten_heat_flx_atm_into_ice", "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_evap_rate_atm_into_ice"     , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_fresh_water_to_ocean_rate"  , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_salt_rate"                  , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "net_heat_flx_to_ocn"             , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_ice_volume"                 , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_snow_volume"                , "will provide")
+
+
+
+
+  !  call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_net_lw_flx"      , "will provide") !, data=ice_data%flux_lw  )
 
   !Ice%flux_t(:,:) = 0.0 ; Ice%flux_q(:,:) = 0.0
   !Ice%flux_sw_nir_dir(:,:) = 0.0 ; Ice%flux_sw_nir_dif(:,:) = 0.0
@@ -1101,7 +1139,7 @@ module sis2_cap_mod
 
     ! local variables
     integer :: rc
-    character(len=*), parameter :: subname='(cice_cap:fld_list_add)'
+    character(len=*), parameter :: subname='(sis2_cap:fld_list_add)'
 
     ! fill in the new entry
 
