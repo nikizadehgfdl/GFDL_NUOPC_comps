@@ -1,0 +1,8 @@
+cp NEMS//AppBuilder/CFS.template.appBuilder ../../../NEMS//AppBuilder/CFS.template.appBuilder
+cp NEMS//NEMSAppBuilder ../../../NEMS//NEMSAppBuilder
+cp NEMS//src/conf/configure.nems.NUOPC ../../../NEMS//src/conf/configure.nems.NUOPC
+cp NEMS//src/makefile ../../../NEMS//src/makefile
+cp NEMS//src/module_EARTH_GRID_COMP.F90 ../../../NEMS//src/module_EARTH_GRID_COMP.F90
+cp UGCS-Seasonal.appBuilder ../../../  
+cp UGCS-Seasonal.compsetRun ../../../
+

@@ -2,6 +2,6 @@
 # src location Zeus: wd
 
 ESMF_DEP_FRONT     = mom_cap_mod
-ESMF_DEP_INCPATH   = /scratch4/GFDL/gfdlscr/Niki.Zadeh/NEMS/UGCS-Seasonal0.2.DREV80567.sis2.github/trunk/GFDL_NUOPC_comps-INSTALL/MOM5
+ESMF_DEP_INCPATH   = /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/trunk/GFDL_NUOPC_comps-INSTALL/MOM5
 ESMF_DEP_CMPL_OBJS = 
-ESMF_DEP_LINK_OBJS = /scratch4/GFDL/gfdlscr/Niki.Zadeh/NEMS/UGCS-Seasonal0.2.DREV80567.sis2.github/trunk/GFDL_NUOPC_comps-INSTALL/MOM5/libmom5_cap.a /scratch4/GFDL/gfdlscr/Niki.Zadeh/NEMS/UGCS-Seasonal0.2.DREV80567.sis2.github/trunk/GFDL_NUOPC_comps-INSTALL/MOM5/libMOM5.a /scratch4/GFDL/gfdlscr/Niki.Zadeh/NEMS/UGCS-Seasonal0.2.DREV80567.sis2.github/trunk/GFDL_NUOPC_comps-INSTALL/MOM5/libFMS.a
+ESMF_DEP_LINK_OBJS = /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/trunk/GFDL_NUOPC_comps-INSTALL/MOM5/libmom5_cap.a /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/trunk/GFDL_NUOPC_comps-INSTALL/MOM5/libMOM5.a /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/trunk/GFDL_NUOPC_comps-INSTALL/MOM5/libFMS.a
