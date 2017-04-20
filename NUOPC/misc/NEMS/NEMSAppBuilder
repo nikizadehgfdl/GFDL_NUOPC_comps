@@ -317,15 +317,15 @@ build_mom5_1(){
     cd $COMP_SRCDIR/build/$MACHINE_ID/FMS
     rm path_names*
     ../../../src/mkmf/bin/list_paths ../../../src/FMS
-    ../../../src/mkmf/bin/mkmf -t ../../../src/mkmf/templates/mkmf.template.theia -p libFMS.a -c "-Duse_libMPI -Duse_netCDF" path_names
-    source ../../../src/mkmf/templates/environs.theia
+    ../../../src/mkmf/bin/mkmf -t ../../../src/mkmf/templates/mkmf.template.$MACHINE_ID -p libFMS.a -c "-Duse_libMPI -Duse_netCDF" path_names
+#    source ../../../src/mkmf/templates/environs.$MACHINE_ID
     make NETCDF=3 DEBUG=on libFMS.a
 #build MOM5 lib
     mkdir -p $COMP_SRCDIR/build/$MACHINE_ID/MOM5
     cd $COMP_SRCDIR/build/$MACHINE_ID/MOM5
     rm path_names*
     ../../../src/mkmf/bin/list_paths ../../../src/{FMS/include} ../../../src/ocean_shared/generic_tracers ../../../src/MOM5/{ocean_core,ocean_bgc,ocean_diag,ocean_blobs,ocean_param/neutral,ocean_param/sources,ocean_param/lateral,ocean_param/vertical,ocean_param/gotm-4.0/include,ocean_param/gotm-4.0/turbulence,ocean_param/gotm-4.0/util,ocean_tracers,ocean_wave}
-    ../../../src/mkmf/bin/mkmf -t ../../../src/mkmf/templates/mkmf.template.theia -o '-I../FMS' -p libMOM5.a path_names
+    ../../../src/mkmf/bin/mkmf -t ../../../src/mkmf/templates/mkmf.template.$MACHINE_ID -o '-I../FMS' -p libMOM5.a path_names
     make NETCDF=3 libMOM5.a
 
     cd ../../../NUOPC/MOM5_CAP
@@ -353,22 +353,22 @@ build_sis2(){
     cd $COMP_SRCDIR/build/$MACHINE_ID/FMS
     rm path_names*
     ../../../src/mkmf/bin/list_paths ../../../src/FMS
-    ../../../src/mkmf/bin/mkmf -t ../../../src/mkmf/templates/mkmf.template.theia -p libFMS.a -c "-Duse_libMPI -Duse_netCDF" path_names 
-    source ../../../src/mkmf/templates/environs.theia
+    ../../../src/mkmf/bin/mkmf -t ../../../src/mkmf/templates/mkmf.template.$MACHINE_ID -p libFMS.a -c "-Duse_libMPI -Duse_netCDF" path_names 
+#    source ../../../src/mkmf/templates/environs.$MACHINE_ID
     make NETCDF=3 DEBUG=on libFMS.a
 #build required MOM6 lib    
     mkdir -p $COMP_SRCDIR/build/$MACHINE_ID/MOM6
     cd $COMP_SRCDIR/build/$MACHINE_ID/MOM6
     rm path_names*
     ../../../src/mkmf/bin/list_paths ../../../src/MOM6/config_src/dynamic ../../../src/MOM6/config_src/coupled_driver/MOM_surface_forcing.F90 ../../../src/MOM6/config_src/coupled_driver/coupler_util.F90 ../../../src/MOM6/src/{*,*/*}/ ../../../src/{FMS/include}/
-    ../../../src/mkmf/bin/mkmf -t ../../../src/mkmf/templates/mkmf.template.theia -o '-I../FMS' -p libMOM6.a path_names
+    ../../../src/mkmf/bin/mkmf -t ../../../src/mkmf/templates/mkmf.template.$MACHINE_ID -o '-I../FMS' -p libMOM6.a path_names
     make NETCDF=3 DEBUG=on libMOM6.a
 #build SIS2 lib    
     mkdir -p $COMP_SRCDIR/build/$MACHINE_ID/SIS2
     cd $COMP_SRCDIR/build/$MACHINE_ID/SIS2
     rm path_names*
     ../../../src/mkmf/bin/list_paths ../../../src/{ice_ocean_extras/ice_param,icebergs,SIS2}/
-    ../../../src/mkmf/bin/mkmf -t ../../../src/mkmf/templates/mkmf.template.theia -o '-I../FMS -I../MOM6 -I../../../src/MOM6/src/framework' -p libSIS2.a -c '-Duse_libMPI -Duse_netCDF' path_names
+    ../../../src/mkmf/bin/mkmf -t ../../../src/mkmf/templates/mkmf.template.$MACHINE_ID -o '-I../FMS -I../MOM6 -I../../../src/MOM6/src/framework' -p libSIS2.a -c '-Duse_libMPI -Duse_netCDF' path_names
     make NETCDF=3 DEBUG=on libSIS2.a
 #
     cd ../../../NUOPC/SIS2_CAP
@@ -998,6 +998,7 @@ if [[ -f ../exe/NEMS.x ]] ; then
 fi
 # build loop
 while [[ ! -f ../exe/NEMS.x ]] ; do
+#  source $ROOTDIR/GFDL_NUOPC_comps/src/mkmf/templates/environs.$MACHINE_ID
   echo "make $TARGET $COMPOPT $COMPDIRS" >> $ROOTDIR/appBuilder.NEMS.log.$$ 2>&1
   echo >> $ROOTDIR/appBuilder.NEMS.log.$$ 2>&1
   

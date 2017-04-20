@@ -2,7 +2,7 @@
 #
 ## UGCS-Seasonal NEMS Application Builder file
 
-COMPONENTS=( GSM SIS2 MOM5 WW3 )
+COMPONENTS=( GSM SIS2 MOM5 )
 
 # SIS2
 SIS2_SRCDIR=$ROOTDIR/GFDL_NUOPC_comps
@@ -12,16 +12,21 @@ SIS2_BINDIR=$ROOTDIR/GFDL_NUOPC_comps-INSTALL/SIS2
 MOM5_SRCDIR=$ROOTDIR/GFDL_NUOPC_comps
 MOM5_BINDIR=$ROOTDIR/GFDL_NUOPC_comps-INSTALL/MOM5
 
-# WW3
-WW3_SRCDIR=$ROOTDIR/WW3
-WW3_BINDIR=$ROOTDIR/WW3-INSTALL
-
 # Gaea environment
 environment_gaea(){
   source /etc/profile
   module use ~Gerhard.Theurich/Modulefiles
-  module swap PrgEnv-pgi PrgEnv-intel
-  module load cray-netcdf esmf/7.0.0
+  module rm PrgEnv-pgi
+  module rm PrgEnv-intel
+  module rm cray-mpich
+  module rm cray-libsci
+  module rm cray-hdf5
+  module rm cray-netcdf
+  module load PrgEnv-intel
+  module load cray-mpich
+  module load cray-libsci
+  module load cray-hdf5 cray-netcdf
+  module load esmf/7.1.0bs05
 }
 
 # Theia environment

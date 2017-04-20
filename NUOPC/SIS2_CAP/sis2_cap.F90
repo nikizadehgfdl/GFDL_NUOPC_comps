@@ -33,6 +33,7 @@ module sis2_cap_mod
   use time_manager_mod,         only: fms_get_calendar_type => get_calendar_type
 
   use ice_model_mod,            only: ice_model_init, ice_model_end
+  use ice_model_mod,            only: set_ice_surface_fields
   use ice_model_mod,            only: update_ice_model_slow_up
   use ice_model_mod,            only: update_ice_model_fast
   use ice_model_mod,            only: update_ice_model_slow_dn
@@ -85,7 +86,7 @@ module sis2_cap_mod
   character(len=256) :: tmpstr
   integer   :: dbrc
 
-  type(ESMF_Grid), save   :: mom_grid_i
+  type(ESMF_Grid), save   :: sis2_grid_i
   logical                 :: write_diagnostics = .true.
   logical                 :: profile_memory = .true.
   logical                 :: ocean_solo = .true.
@@ -141,12 +142,13 @@ module sis2_cap_mod
       return  ! bail out
     
     ! attach specializing method(s)
-!    call NUOPC_CompSpecialize(gcomp, specLabel=model_label_Advance, &
-!      specRoutine=ModelAdvance, rc=rc)
-!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!      line=__LINE__, &
-!      file=__FILE__)) &
-!      return  ! bail out
+    call NUOPC_CompSpecialize(gcomp, specLabel=model_label_Advance, &
+      specRoutine=SIS2_ModelAdvance_slow, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+
 !    call NUOPC_CompSpecialize(gcomp, specLabel=model_label_Finalize, &
 !      specRoutine=ocean_model_finalize, rc=rc)
 !    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
@@ -352,6 +354,8 @@ module sis2_cap_mod
     call data_override_init
     call ice_model_init( ice_data, Time, Time, Time_step_fast, Time_step_slow )
 
+call set_ice_surface_fields(ice_data) !Niki: experimental
+
     call data_override_init(Ice_domain_in = ice_data%domain)
     call mpp_get_compute_domain(ice_data%domain, isc, iec, jsc, jec)
     !allocate and initialize ocean_ice_boundary
@@ -407,7 +411,7 @@ module sis2_cap_mod
     atmos_ice_boundary%coszen=0.0
     atmos_ice_boundary%p=0.0
 
-ice_data%t_surf = 274.0
+!ice_data%t_surf = 274.0
 
     ice_internalstate%ptr%ice_data_type_ptr => ice_data
     call ESMF_GridCompSetInternalState(gcomp, ice_internalstate, rc)
@@ -416,7 +420,7 @@ ice_data%t_surf = 274.0
       file=__FILE__)) &
       return  ! bail out
 
-    call SIS_FieldsSetup(atmos_ice_boundary, ocean_ice_boundary, ice_data)
+    call SIS2_FieldsSetup(atmos_ice_boundary, ocean_ice_boundary, ice_data)
 
     call SIS_AdvertiseFields(importState, fldsToIce_num, fldsToIce, rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
@@ -628,7 +632,7 @@ ice_data%t_surf = 274.0
        rc = rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
-    mom_grid_i = gridIn
+    sis2_grid_i = gridIn
 
     call ESMF_GridAddCoord(gridIn, staggerLoc=ESMF_STAGGERLOC_CENTER, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
@@ -738,6 +742,7 @@ ice_data%t_surf = 274.0
     allocate(gfld(nxg,nyg))
 
 !   call ocean_model_data_get(Ocean_state, Ocean_sfc, 'mask', ofld, isc, jsc)
+!    ofld = ice_data%sCS%G%mask2dBu
     ofld = ice_data%sCS%G%mask2dT
     write(tmpstr,*) subname//' ofld mask = ',minval(ofld),maxval(ofld)
     call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
@@ -752,8 +757,10 @@ ice_data%t_surf = 274.0
     enddo
     enddo
 
+
 !    call ocean_model_data_get(Ocean_state, Ocean_sfc, 'area', ofld, isc, jsc)
-    ofld = ice_data%area
+!    ofld = ice_data%sCS%G%areaBu
+    ofld = ice_data%sCS%G%areaT
     write(tmpstr,*) subname//' ofld area = ',minval(ofld),maxval(ofld)
     call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
     call mpp_global_field(ice_data%domain, ofld, gfld)
@@ -768,7 +775,8 @@ ice_data%t_surf = 274.0
     enddo
 
 !    call ocean_model_data_get(Ocean_state, Ocean_sfc, 'tlon', ofld, isc, jsc)
-    ofld = ice_data%sCS%G%geoLonT
+    ofld = ice_data%sCS%G%geoLonBu
+!    ofld = ice_data%sCS%G%geoLonT
     write(tmpstr,*) subname//' ofld xt = ',minval(ofld),maxval(ofld)
     call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
     call mpp_global_field(ice_data%domain, ofld, gfld)
@@ -784,7 +792,8 @@ ice_data%t_surf = 274.0
     enddo
 
 !    call ocean_model_data_get(Ocean_state, Ocean_sfc, 'tlat', ofld, isc, jsc)
-    ofld = ice_data%sCS%G%geoLatT
+    ofld = ice_data%sCS%G%geoLatBu
+!    ofld = ice_data%sCS%G%geoLatT
     write(tmpstr,*) subname//' ofld yt = ',minval(ofld),maxval(ofld)
     call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
     call mpp_global_field(ice_data%domain, ofld, gfld)
@@ -888,11 +897,11 @@ ice_data%t_surf = 274.0
       file=__FILE__)) &
       return  ! bail out
 
-    call ESMF_StateGet(exportState, itemSearch="mean_net_lw_flx", itemCount=icount, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+!    call ESMF_StateGet(exportState, itemSearch="mean_net_lw_flx", itemCount=icount, rc=rc)
+!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+!      line=__LINE__, &
+!      file=__FILE__)) &
+!      return  ! bail out
     
     ! Do sst initialization if it's part of export state
 !    if(icount /= 0) then
@@ -956,6 +965,7 @@ ice_data%t_surf = 274.0
       call NUOPC_Advertise(state, &
         standardName=field_defs(i)%stdname, &
         name=field_defs(i)%shortname, &
+        TransferOfferGeomObject="will provide", &
         rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
@@ -1044,6 +1054,231 @@ ice_data%t_surf = 274.0
 
   end subroutine SIS_RealizeFields
 
+  subroutine SIS2_ModelAdvance_slow(gcomp, rc)
+    type(ESMF_GridComp)                    :: gcomp
+    integer, intent(out)                   :: rc
+    
+    ! local variables
+    type(ESMF_Clock)                       :: clock
+    type(ESMF_State)                       :: importState, exportState
+    type(ESMF_Time)                        :: currTime
+    type(ESMF_TimeInterval)                :: timeStep
+    type(ESMF_Field)                       :: lfield,lfield2d
+    type(ESMF_Grid)                        :: grid
+    real(ESMF_KIND_R8), pointer            :: fldptr(:,:,:)
+    real(ESMF_KIND_R8), pointer            :: fldptr2d(:,:)
+    character(len=64)                      :: fldname
+    integer                                :: i,j,iblk,n,i1,i2,j1,j2
+    integer                                :: ilo,ihi,jlo,jhi
+    real(ESMF_KIND_R8)                     :: ue, vn, ui, vj
+    real(ESMF_KIND_R8)                     :: sigma_r, sigma_l, sigma_c
+    type(ESMF_StateItem_Flag)              :: itemType
+    ! imports
+    real(ESMF_KIND_R8), pointer :: dataPtr_mdlwfx(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_swvr(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_swvf(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_swir(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_swif(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_lprec(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_fprec(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_sst(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_sss(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_sl(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_sssz(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_sssm(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_ocncz(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_ocncm(:,:,:)
+!    real(ESMF_KIND_R8), pointer :: dataPtr_ocnci(:,:,:)
+!    real(ESMF_KIND_R8), pointer :: dataPtr_ocncj(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_fmpot(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_mld(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_mzmf(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_mmmf(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_rhoabot(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_Tbot(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_pbot(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_qbot(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_zlvl(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_ubot(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_vbot(:,:,:)
+    ! exports
+    real(ESMF_KIND_R8), pointer :: dataPtr_mask(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_ifrac(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_itemp(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_alvdr(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_alidr(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_alvdf(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_alidf(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_strairxT(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_strairyT(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_strocnxT(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_strocnyT(:,:,:)
+!    real(ESMF_KIND_R8), pointer :: dataPtr_strocni(:,:,:)
+!    real(ESMF_KIND_R8), pointer :: dataPtr_strocnj(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_fswthru(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_fswthruvdr(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_fswthruvdf(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_fswthruidr(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_fswthruidf(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_flwout(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_fsens(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_flat(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_evap(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_fhocn(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_fresh(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_fsalt(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_vice(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_vsno(:,:,:)
+    character(240)              :: msgString
+    character(len=*),parameter  :: subname='(cice_cap:ModelAdvance_slow)'
+
+    rc = ESMF_SUCCESS
+    if(profile_memory) call ESMF_VMLogMemInfo("Entering CICE Model_ADVANCE: ")
+    write(*,*) subname,' --- run phase 1 called --- '
+
+    
+    ! query the Component for its clock, importState and exportState
+    call ESMF_GridCompGet(gcomp, clock=clock, importState=importState, &
+      exportState=exportState, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+
+    ! HERE THE MODEL ADVANCES: currTime -> currTime + timeStep
+    
+    ! Because of the way that the internal Clock was set in SetClock(),
+    ! its timeStep is likely smaller than the parent timeStep. As a consequence
+    ! the time interval covered by a single parent timeStep will result in 
+    ! multiple calls to the ModelAdvance() routine. Every time the currTime
+    ! will come in by one internal timeStep advanced. This goes until the
+    ! stopTime of the internal Clock has been reached.
+    
+    call ESMF_ClockPrint(clock, options="currTime", &
+      preString="------>Advancing CICE from: ", unit=msgString, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+    call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+    
+    call ESMF_ClockGet(clock, currTime=currTime, timeStep=timeStep, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+    
+    call ESMF_TimePrint(currTime + timeStep, &
+      preString="--------------------------------> to: ", &
+      unit=msgString, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+    call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+
+!    call State_getFldPtr(importState,'mean_down_sw_vis_dir_flx',dataPtr_swvr,rc=rc)
+!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+
+   write(*,*) subname,' --- run phase 2 called --- '
+!    call ESMF_LogWrite(info, ESMF_LOGMSG_INFO, rc=dbrc)
+!    if(profile_memory) call ESMF_VMLogMemInfo("Before CICE_Run")
+!    call CICE_Run
+!    if(profile_memory) call ESMF_VMLogMemInfo("Afterr CICE_Run")
+    write(*,*) subname,' --- run phase 3 called --- '
+!    call ESMF_LogWrite(info, ESMF_LOGMSG_INFO, rc=dbrc)
+
+    !---- local modifications to coupling fields -----
+
+!    call State_getFldPtr(exportState,'ice_mask',dataPtr_mask,rc=rc)
+!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+!    call State_getFldPtr(exportState,'ice_fraction',dataPtr_ifrac,rc=rc)
+!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+!    call State_getFldPtr(exportState,'sea_ice_temperature',dataPtr_itemp,rc=rc)
+!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+
+  end subroutine SIS2_ModelAdvance_slow
+
+
+  subroutine SIS2_FieldsSetup(atmos_ice_boundary, ocean_ice_boundary, ice_data)
+    type(ice_data_type),           intent(in) :: ice_data
+    type(atmos_ice_boundary_type), intent(in) :: atmos_ice_boundary
+    type(ocean_ice_boundary_type), intent(in) :: ocean_ice_boundary
+
+    character(len=*),parameter  :: subname='(sis2_cap:SIS2_FieldsSetup)'
+
+!--------- import fields to Sea Ice -------------
+
+! tcraig, don't point directly into cice data YET (last field is optional in interface)
+! instead, create space for the field when it's "realized".
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_height_lowest"       , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_temp_height_lowest"       , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_spec_humid_height_lowest" , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_zonal_wind_height_lowest" , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_merid_wind_height_lowest" , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_pres_height_lowest"       , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_lw_flx"         , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_vis_dir_flx" , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_vis_dif_flx" , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_ir_dir_flx"  , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_ir_dif_flx"  , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_prec_rate"           , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_fprec_rate"          , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_temperature"  , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "s_surf"                   , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "sea_lev"                  , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_slope_zonal"  , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_slope_merid"  , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_zonal"        , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_merid"        , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "freezing_melting_potential", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mixed_layer_depth"        , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_zonal_moment_flx", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_merid_moment_flx", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_surface_height"  , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_temp_height2m"  , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_spec_humid_height2m"  , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "air_density_height_lowest"  , "will provide")
+
+!--------- export fields from Sea Ice -------------
+
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "sea_ice_temperature"             , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_vis_dir_albedo"         , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dir_albedo"          , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_vis_dif_albedo"         , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dif_albedo"          , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "ice_mask"                        , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "ice_fraction"                    , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_air_ice_zonal"         , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_air_ice_merid"         , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_ocn_ice_zonal"         , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_ocn_ice_merid"         , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_sw_pen_to_ocn"              , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_net_sw_vis_dir_flx"         , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_net_sw_vis_dif_flx"         , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_net_sw_ir_dir_flx"          , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_net_sw_ir_dif_flx"          , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_up_lw_flx_ice"              , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_sensi_heat_flx_atm_into_ice", "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_laten_heat_flx_atm_into_ice", "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_evap_rate_atm_into_ice"     , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_fresh_water_to_ocean_rate"  , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_salt_rate"                  , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "net_heat_flx_to_ocn"             , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_ice_volume"                 , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_snow_volume"                , "will provide")
+
+
+  end subroutine SIS2_FieldsSetup
+
   subroutine SIS_FieldsSetup(atmos_ice_boundary, ocean_ice_boundary, ice_data)
     type(ice_data_type),           intent(in) :: ice_data
     type(atmos_ice_boundary_type), intent(in) :: atmos_ice_boundary
@@ -1053,11 +1288,12 @@ ice_data%t_surf = 274.0
 
 !--------- import fields to Sea Ice -------------
     !--from ATM boundary
-    call fld_list_add(fldsToIce_num, fldsToIce, "mean_net_lw_flx", data=atmos_ice_boundary%lw_flux(:,:,1))
-    call fld_list_add(fldsToIce_num, fldsToIce, "mean_net_sw_vis_dir_flx",data=atmos_ice_boundary%sw_flux_vis_dir(:,:,1))
-    call fld_list_add(fldsToIce_num, fldsToIce, "mean_net_sw_vis_dif_flx",data=atmos_ice_boundary%sw_flux_vis_dif(:,:,1))
-    call fld_list_add(fldsToIce_num, fldsToIce, "mean_net_sw_ir_dir_flx",data=atmos_ice_boundary%sw_flux_nir_dir(:,:,1))
-    call fld_list_add(fldsToIce_num, fldsToIce, "mean_net_sw_ir_dif_flx",data=atmos_ice_boundary%sw_flux_nir_dif(:,:,1))
+!    call fld_list_add(fldsToIce_num, fldsToIce, "mean_net_lw_flx", data=atmos_ice_boundary%lw_flux(:,:,1))
+!    call fld_list_add(fldsToIce_num, fldsToIce, "mean_net_sw_vis_dir_flx",data=atmos_ice_boundary%sw_flux_vis_dir(:,:,1))
+!    call fld_list_add(fldsToIce_num, fldsToIce, "mean_net_sw_vis_dif_flx",data=atmos_ice_boundary%sw_flux_vis_dif(:,:,1))
+!    call fld_list_add(fldsToIce_num, fldsToIce, "mean_net_sw_ir_dir_flx",data=atmos_ice_boundary%sw_flux_nir_dir(:,:,1))
+!    call fld_list_add(fldsToIce_num, fldsToIce, "mean_net_sw_ir_dif_flx",data=atmos_ice_boundary%sw_flux_nir_dif(:,:,1))
+!
 !    call fld_list_add(fldsToIce_num, fldsToIce, "", data=atmos_ice_boundary%u_flux(:,:,1))
 !    call fld_list_add(fldsToIce_num, fldsToIce, "", data=atmos_ice_boundary%v_flux(:,:,1))
 !    call fld_list_add(fldsToIce_num, fldsToIce, "", data=atmos_ice_boundary%u_star(:,:,1))
@@ -1076,35 +1312,35 @@ ice_data%t_surf = 274.0
 !    call fld_list_add(fldsToIce_num, fldsToIce, "", data=land_ice_boundary%runoff_hflx(:,:,1))
 !    call fld_list_add(fldsToIce_num, fldsToIce, "", data=land_ice_boundary%calving_hflx(:,:,1))
     !--From OCN boundary. These should correspond to fields in OCN export fields.
-    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_zonal",          data=ocean_ice_boundary%u(:,:))
-    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_merid",          data=ocean_ice_boundary%v(:,:))
-    call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_temperature",    data=ocean_ice_boundary%t(:,:))
-    call fld_list_add(fldsToIce_num, fldsToIce, "s_surf",                     data=ocean_ice_boundary%s(:,:))
-    call fld_list_add(fldsToIce_num, fldsToIce, "freezing_melting_potential", data=ocean_ice_boundary%frazil(:,:))
+!    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_zonal",          data=ocean_ice_boundary%u(:,:))
+!    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_merid",          data=ocean_ice_boundary%v(:,:))
+!    call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_temperature",    data=ocean_ice_boundary%t(:,:))
+!    call fld_list_add(fldsToIce_num, fldsToIce, "s_surf",                     data=ocean_ice_boundary%s(:,:))
+!    call fld_list_add(fldsToIce_num, fldsToIce, "freezing_melting_potential", data=ocean_ice_boundary%frazil(:,:))
 
 !--------- export fields from Sea Ice -------------
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "sea_ice_temperature"    ,data=ice_data%t_surf(:,:,1)         )
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_vis_dir_albedo",data=ice_data%albedo_vis_dir(:,:,1))
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dir_albedo", data=ice_data%albedo_nir_dir(:,:,1))
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_vis_dif_albedo",data=ice_data%albedo_vis_dif(:,:,1))
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dif_albedo", data=ice_data%albedo_nir_dif(:,:,1))
+!    call fld_list_add(fldsFrIce_num, fldsFrIce, "sea_ice_temperature"    ,data=ice_data%t_surf(:,:,1)         )
+!    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_vis_dir_albedo",data=ice_data%albedo_vis_dir(:,:,1))
+!    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dir_albedo", data=ice_data%albedo_nir_dir(:,:,1))
+!    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_vis_dif_albedo",data=ice_data%albedo_vis_dif(:,:,1))
+!    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dif_albedo", data=ice_data%albedo_nir_dif(:,:,1))
 
   end subroutine SIS_FieldsSetup
 
-  subroutine fld_list_add(num, fldlist, stdname, data, shortname)
+  subroutine fld_list_add(num, fldlist, stdname, transferOffer, data, shortname)
     ! ----------------------------------------------
     ! Set up a list of field information
     ! ----------------------------------------------
     integer,             intent(inout)  :: num
     type(fld_list_type), intent(inout)  :: fldlist(:)
     character(len=*),    intent(in)     :: stdname
+    character(len=*),    intent(in)     :: transferOffer
     real(ESMF_KIND_R8), dimension(:,:),optional, target :: data
     character(len=*),    intent(in),optional :: shortname
 
     ! local variables
     integer :: rc
     character(len=*), parameter :: subname='(sis2_cap:fld_list_add)'
-    character(len=*), parameter :: transferOffer='can provide'
 
     ! fill in the new entry
 

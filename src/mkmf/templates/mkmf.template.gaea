@@ -38,7 +38,7 @@ FPPFLAGS := -fpp -Wp,-w $(INCLUDE)
 # reproducibility on the c3 system.
 FFLAGS := -msse2 -fno-alias -auto -safe-cray-ptr -ftz -assume byterecl -i4 -r8 -nowarn -sox -traceback $(INCLUDE)
 FFLAGS_OPT = -O3 -debug minimal -fp-model source
-FFLAGS_DEBUG = -g -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -fpe0 -ftrapuv
+FFLAGS_DEBUG = -g -traceback -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -fpe0 -ftrapuv
 FFLAGS_REPRO = -O2 -debug minimal -fp-model source
 FFLAGS_OPENMP = -openmp
 FFLAGS_VERBOSE = -v -V -what -warn all
