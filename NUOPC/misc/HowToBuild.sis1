@@ -1,0 +1,38 @@
+#The first build
+# NEMS/NEMSAppBuilder
+#for consequent builds after modifying SIS2 or SIS2_CAP you can
+#on gaea
+  source /etc/profile
+  module use ~Gerhard.Theurich/Modulefiles
+  module rm PrgEnv-pgi
+  module rm PrgEnv-intel
+  module rm cray-mpich
+  module rm cray-libsci
+  module rm cray-hdf5
+  module rm cray-netcdf
+  module load PrgEnv-intel
+  module load cray-mpich
+  module load cray-libsci
+  module load cray-hdf5 cray-netcdf
+  module load esmf/7.1.0bs05
+
+setenv rootDir /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/trunk
+
+\rm -f $rootDir/GFDL_NUOPC_comps-INSTALL/MOM5/libmom5_cap.a $rootDir/GFDL_NUOPC_comps-INSTALL/MOM5/mom5_cap_mod.mod
+cd $rootDir/GFDL_NUOPC_comps/NUOPC/MOM5_CAP
+make -f makefile.nuopc NEMSMOMDIR=$rootDir/GFDL_NUOPC_comps/build/gaea INSTALLDIR=$rootDir/GFDL_NUOPC_comps-INSTALL/MOM5 install
+
+
+\rm -f $rootDir/GFDL_NUOPC_comps-INSTALL/SIS1/libsis1_cap.a $rootDir/GFDL_NUOPC_comps-INSTALL/SIS1/sis1_cap_mod.mod 
+cd $rootDir/GFDL_NUOPC_comps/NUOPC/SIS1_CAP
+make -f makefile.nuopc NEMSMOMDIR=$rootDir/GFDL_NUOPC_comps/build/gaea INSTALLDIR=$rootDir/GFDL_NUOPC_comps-INSTALL/SIS1 install
+if($status) exit
+cd $rootDir/NEMS/src
+make gsm COMP=,sis1,mom5, SIS1_DIR=$rootDir/GFDL_NUOPC_comps-INSTALL/SIS1 MOM5_DIR=$rootDir/GFDL_NUOPC_comps-INSTALL/MOM5
+
+#Here's how to run a test
+#imsubc3 7
+#cd /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/NUOPC_SIS2_workdir
+#\rm PET* array_med* field_med* init_field_* FLX.F* SFC.F* SIG.F* 
+#setenv OMP_NUM_THREADS 1
+#aprun -d 1 -n 216 /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/trunk/NEMS/exe/NEMS.x | & tee stdout

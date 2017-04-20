@@ -1,0 +1,7 @@
+# ESMF self-describing build dependency makefile fragment
+# src location Zeus: wd
+
+ESMF_DEP_FRONT     = sis1_cap_mod
+ESMF_DEP_INCPATH   = /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/trunk/GFDL_NUOPC_comps-INSTALL/SIS1
+ESMF_DEP_CMPL_OBJS = 
+ESMF_DEP_LINK_OBJS = /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/trunk/GFDL_NUOPC_comps-INSTALL/SIS1/libsis1_cap.a /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/trunk/GFDL_NUOPC_comps-INSTALL/SIS1/libSIS1.a /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/trunk/GFDL_NUOPC_comps-INSTALL/SIS1/libFMS.a

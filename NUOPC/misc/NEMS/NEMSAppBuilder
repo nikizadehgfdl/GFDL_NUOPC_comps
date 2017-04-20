@@ -338,6 +338,42 @@ build_mom5_1(){
   fi
 }
 
+build_sis1(){
+  #
+  # in: COMP, COMP_SRCDIR, COMP_BINDIR
+  if [[ $1"" == "clean" ]] ; then
+    echo "Cleaning $COMP..."
+    echo "Only partially implemented!!!"
+    echo "...done cleaning $COMP."
+  else
+    echo "Building $COMP..."
+#build required shared(fms) lib libfms.a
+    mkdir -p $COMP_SRCDIR/build/$MACHINE_ID/FMS
+    echo cd $COMP_SRCDIR/build/$MACHINE_ID/FMS
+    cd $COMP_SRCDIR/build/$MACHINE_ID/FMS
+    rm path_names*
+    ../../../src/mkmf/bin/list_paths ../../../src/FMS
+    ../../../src/mkmf/bin/mkmf -t ../../../src/mkmf/templates/mkmf.template.$MACHINE_ID -p libFMS.a -c "-Duse_libMPI -Duse_netCDF" path_names 
+    make NETCDF=3 DEBUG=on libFMS.a
+#build SIS lib    
+    mkdir -p $COMP_SRCDIR/build/$MACHINE_ID/SIS1
+    cd $COMP_SRCDIR/build/$MACHINE_ID/SIS1
+    rm path_names*
+    ../../../src/mkmf/bin/list_paths ../../../src/{ice_ocean_extras/ice_param,ice_sis}/
+    ../../../src/mkmf/bin/mkmf -t ../../../src/mkmf/templates/mkmf.template.$MACHINE_ID -o '-I../FMS' -p libSIS1.a -c '-Duse_libMPI -Duse_netCDF' path_names
+    make NETCDF=3 DEBUG=on libSIS1.a
+#
+    cd ../../../NUOPC/SIS1_CAP
+    env
+    make -f makefile.nuopc NEMSMOMDIR=$COMP_SRCDIR/build/$MACHINE_ID INSTALLDIR=$COMP_BINDIR install
+    if ([ ! -d $COMP_BINDIR ]); then
+      echo "...failed building $COMP."
+    else
+      echo "...done building $COMP."
+    fi
+  fi
+}
+
 build_sis2(){
   #
   # in: COMP, COMP_SRCDIR, COMP_BINDIR
@@ -785,6 +821,8 @@ if [[ "$APPLEVELUSE" == "true" ]] ; then
         BUILD_FUNC=build_mom5_1
       elif [[ $COMP == "SIS2" ]] ; then
         BUILD_FUNC=build_sis2
+      elif [[ $COMP == "SIS1" ]] ; then
+        BUILD_FUNC=build_sis1
       elif [[ $COMP == "CICE" ]] ; then
         BUILD_FUNC=build_cice
       elif [[ $COMP == "IPE" ]] ; then
@@ -900,6 +938,9 @@ for i in "${COMPONENTS[@]}" ; do
   elif [[ $COMPO == "SIS2" ]] ; then
     COMP=$COMP",sis2"
     COMPDIRS="$COMPDIRS SIS2_DIR=$SIS2_BINDIR"
+  elif [[ $COMPO == "SIS1" ]] ; then
+    COMP=$COMP",sis1"
+    COMPDIRS="$COMPDIRS SIS1_DIR=$SIS1_BINDIR"
  # - actual ionosphere-plasmasphere model components
   elif [[ $COMPO == "IPE" ]] ; then
     COMP=$COMP",ipe"
