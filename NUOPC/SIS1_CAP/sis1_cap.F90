@@ -150,12 +150,12 @@ module sis1_cap_mod
       file=__FILE__)) &
       return  ! bail out
 
-    call NUOPC_CompSpecialize(gcomp, specLabel=model_label_Finalize, &
-      specRoutine=ocean_model_finalize, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+!    call NUOPC_CompSpecialize(gcomp, specLabel=model_label_Finalize, &
+!      specRoutine=ice_model_finalize, rc=rc)
+!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+!      line=__LINE__, &
+!      file=__FILE__)) &
+!      return  ! bail out
 
     ! attach specializing method(s)
     ! No need to change clock settings
@@ -479,14 +479,15 @@ module sis1_cap_mod
     integer                                :: nblocks_tot
     logical                                :: found
     real(ESMF_KIND_R8), allocatable        :: ofld(:,:), gfld(:,:)
-    real(ESMF_KIND_R8), pointer            :: t_surf(:,:)
     integer(ESMF_KIND_I4), pointer         :: dataPtr_mask(:,:)
     real(ESMF_KIND_R8), pointer            :: dataPtr_area(:,:)
     real(ESMF_KIND_R8), pointer            :: dataPtr_xcen(:,:)
     real(ESMF_KIND_R8), pointer            :: dataPtr_ycen(:,:)
     real(ESMF_KIND_R8), pointer            :: dataPtr_xcor(:,:)
     real(ESMF_KIND_R8), pointer            :: dataPtr_ycor(:,:)
-    type(ESMF_Field)                       :: field_t_surf
+    real(ESMF_KIND_R8), pointer            :: dataPtr_rmask(:,:)
+    real(ESMF_KIND_R8), pointer            :: dataPtr_frac(:,:)
+    type(ESMF_Field)                       :: field_ice_mask,field_ice_frac 
     character(len=*),parameter  :: subname='(sis1_cap:InitializeRealize)'
     integer :: minIndex(2),maxIndex(2)    
     rc = ESMF_SUCCESS
@@ -905,37 +906,44 @@ module sis1_cap_mod
       file=__FILE__)) &
       return  ! bail out
 
-!    call ESMF_StateGet(exportState, itemSearch="mean_net_lw_flx", itemCount=icount, rc=rc)
-!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!      line=__LINE__, &
-!      file=__FILE__)) &
-!      return  ! bail out
-    
-    ! Do sst initialization if it's part of export state
-!    if(icount /= 0) then
-!      call ESMF_StateGet(exportState, itemName='sea_surface_temperature', field=field_t_surf, rc=rc)
-!      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!        line=__LINE__, &
-!        file=__FILE__)) &
-!        return  ! bail out
-!      call ESMF_FieldGet(field_t_surf, localDe=0, farrayPtr=t_surf, rc=rc)
-!      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!        line=__LINE__, &
-!        file=__FILE__)) &
-!        return  ! bail out
-!      call ocean_model_data_get(Ocean_state, Ocean_sfc, 'mask', ofld, isc, jsc)
-!      lbnd1 = lbound(t_surf,1)
-!      ubnd1 = ubound(t_surf,1)
-!      lbnd2 = lbound(t_surf,2)
-!      ubnd2 = ubound(t_surf,2)
-!      do j = lbnd2, ubnd2
-!      do i = lbnd1, ubnd1
-!         j1 = j - lbnd2 + jsc
-!         i1 = i - lbnd1 + isc
-!         if (ofld(i1,j1) == 0.) t_surf(i,j) = 0.0
-!      enddo
-!      enddo
-!    endif
+    ! Set ice_mask and ice_fraction
+     call ESMF_StateGet(exportState, itemName='ice_mask', field=field_ice_mask, rc=rc)
+     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+      call ESMF_FieldGet(field_ice_mask, localDe=0, farrayPtr=dataPtr_rmask, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+
+     call ESMF_StateGet(exportState, itemName='ice_fraction', field=field_ice_frac, rc=rc)
+     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+      call ESMF_FieldGet(field_ice_frac, localDe=0, farrayPtr=dataPtr_frac, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+
+
+      lbnd1 = lbound(dataPtr_rmask,1)
+      ubnd1 = ubound(dataPtr_rmask,1)
+      lbnd2 = lbound(dataPtr_rmask,2)
+      ubnd2 = ubound(dataPtr_rmask,2)
+      do j = lbnd2, ubnd2
+      do i = lbnd1, ubnd1
+         j1 = j - lbnd2 + jsc
+         i1 = i - lbnd1 + isc
+         dataPtr_frac(i,j) = 1.0 - ice_data%part_size(i1,j1,1)
+         dataPtr_rmask(i,j) = 0.0
+         if (ice_data%part_size(i1,j1,1) < 1.0) dataPtr_rmask(i,j) = 1.0
+      enddo
+      enddo
+
     deallocate(ofld)
 
     call NUOPC_Write(exportState, fileNamePrefix='init_field_ice_export_', &
@@ -1286,7 +1294,8 @@ module sis1_cap_mod
 
     !To ATM
     !Niki: Have to have at least one export field without providing the data argument, otherwise ESMF fails!!!
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "ice_mask")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "ice_mask")     !Niki: Should be set later
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "ice_fraction") !Niki: Should be 1-part_size(:,:,1) 
     call fld_list_add(fldsFrIce_num, fldsFrIce, "sea_ice_temperature"    , &
                                                 data=ice_data%t_surf(isc:iec,jsc:jec,1))
     call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_vis_dir_albedo", &
@@ -1297,13 +1306,11 @@ module sis1_cap_mod
                                                 data=ice_data%albedo_vis_dif(isc:iec,jsc:jec,1))
     call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dif_albedo",  &
                                                 data=ice_data%albedo_nir_dif(isc:iec,jsc:jec,1))
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "ice_fraction"          ,  &
-                                                data=ice_data%part_size(isc:iec,jsc:jec,1)) 
     call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_air_ice_zonal", &
                                                 data=ice_data%flux_u_top_bgrid(isc:iec,jsc:jec,1))
     call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_air_ice_merid", &
                                                 data=ice_data%flux_v_top_bgrid(isc:iec,jsc:jec,1))
-    !To OCN (corresponds to fldsToOcn in MOM5 cap)
+    !To OCN (corresponds to fldsToOcn in MOM5 cap) !Niki: Why aren't the following among the init_field_ice_export- ?
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_zonal_moment_flx",     &
                                                 data=ice_data%flux_u(isc:iec,jsc:jec))
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_merid_moment_flx",     &
