@@ -19,7 +19,7 @@ endif
 
 %.o : %.F90
 	$(ESMF_F90COMPILER) -c $(ESMF_F90COMPILEOPTS) $(USER_CFLAGS) $(UTILINCS) $(ESMF_F90COMPILEPATHS) $(ESMF_F90COMPILEFREECPP) $(ESMF_F90COMPILECPPFLAGS) $<
-sis1_cap.o : 
+sis1_cap.o : time_utils.o
 
 .PRECIOUS: %.o
 
@@ -29,7 +29,7 @@ MAKEFILE = makefile.nuopc
 
 LIBRARY  = libsis1_cap.a
 
-MODULES  = sis1_cap.o
+MODULES  = sis1_cap.o time_utils.o
 
 all default:
 	@gmake -f $(MAKEFILE) $(LIBRARY)

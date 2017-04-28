@@ -33,6 +33,6 @@ make gsm COMP=,sis1,mom5, SIS1_DIR=$rootDir/GFDL_NUOPC_comps-INSTALL/SIS1 MOM5_D
 #Here's how to run a test
 #imsubc3 7
 #cd /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/NUOPC_SIS2_workdir
-#\rm PET* array_med* field_med* init_field_* FLX.F* SFC.F* SIG.F* 
+#\rm PET* array_med* field_med* init_field_* FLX.F* SFC.F* SIG.F* ocn_* ice_*
 #setenv OMP_NUM_THREADS 1
 #aprun -d 1 -n 216 /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/trunk/NEMS/exe/NEMS.x | & tee stdout

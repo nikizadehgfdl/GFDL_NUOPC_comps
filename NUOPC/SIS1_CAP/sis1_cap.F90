@@ -36,45 +36,47 @@ module sis1_cap_mod
   use ice_model_mod,            only: set_ice_surface_fields
   use ice_model_mod,            only: update_ice_model_slow_up
   use ice_model_mod,            only: update_ice_model_fast
-  use ice_model_mod,            only: update_ice_model_slow_dn
+  use ice_model_mod,            only: update_ice_model_slow
   use ice_model_mod,            only: ice_data_type, land_ice_boundary_type
   use ice_model_mod,            only: ocean_ice_boundary_type, atmos_ice_boundary_type
   use ice_model_mod,            only: ice_model_restart
   use ice_grid_mod,             only: geo_lon, geo_lat, geo_lonv_ib, geo_latv_ib
+  use time_utils_mod,           only: esmf2fms_time
 
   use ESMF
   use NUOPC
   use NUOPC_Model, &
-    model_routine_SS      => SetServices, &
-    model_label_SetClock  => label_SetClock, &
-    model_label_Advance   => label_Advance, &
-    model_label_Finalize  => label_Finalize
+       model_routine_SS      => SetServices, &
+       model_label_SetClock  => label_SetClock, &
+       model_label_Advance   => label_Advance, &
+       model_label_Finalize  => label_Finalize
+
 
   implicit none
   private
   public SetServices
 
   type ice_internalstate_type
-    type(ice_data_type),           pointer :: ice_data_type_ptr
-    type(atmos_ice_boundary_type), pointer :: atmos_ice_boundary_type_ptr
-    type(ocean_ice_boundary_type), pointer :: ocean_ice_boundary_type_ptr
-  end type
+     type(ice_data_type),           pointer :: ice_data_type_ptr
+     type(atmos_ice_boundary_type), pointer :: atmos_ice_boundary_type_ptr
+     type(ocean_ice_boundary_type), pointer :: ocean_ice_boundary_type_ptr
+  end type ice_internalstate_type
 
   type ice_internalstate_wrapper
-    type(ice_internalstate_type), pointer :: ptr
-  end type
+     type(ice_internalstate_type), pointer :: ptr
+  end type ice_internalstate_wrapper
 
   type fld_list_type
-    character(len=64) :: stdname
-    character(len=64) :: shortname
-    character(len=64) :: transferOffer
-    logical           :: assoc    ! is the farrayPtr associated with internal data
-    real(ESMF_KIND_R8), dimension(:,:), pointer :: farrayPtr
+     character(len=64) :: stdname
+     character(len=64) :: shortname
+     character(len=64) :: transferOffer
+     logical           :: assoc    ! is the farrayPtr associated with internal data
+     real(ESMF_KIND_R8), dimension(:,:), pointer :: farrayPtr
   end type fld_list_type
 
-!  interface fld_list_add
-!        module procedure fld_list_add_2d, fld_list_add_3d
-!  end interface fld_list_add
+  !  interface fld_list_add
+  !        module procedure fld_list_add_2d, fld_list_add_3d
+  !  end interface fld_list_add
 
   integer,parameter :: fldsMax = 100
   integer :: fldsToIce_num = 0
@@ -93,7 +95,7 @@ module sis1_cap_mod
   logical                 :: ocean_solo = .true.
   integer(ESMF_KIND_I8)   :: restart_interval
 
-  contains
+contains
   !-----------------------------------------------------------------------
   !------------------- Solo Ice code starts here -----------------------
   !-----------------------------------------------------------------------
@@ -106,66 +108,65 @@ module sis1_cap_mod
   !! @param rc return code  
 
   subroutine SetServices(gcomp, rc)
-
     type(ESMF_GridComp)  :: gcomp
     integer, intent(out) :: rc
     character(len=*),parameter  :: subname='(sis1_cap:SetServices)'
 
     rc = ESMF_SUCCESS
-    
+
     ! the NUOPC model component will register the generic methods
     call NUOPC_CompDerive(gcomp, model_routine_SS, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
+
     ! switching to IPD versions
     call ESMF_GridCompSetEntryPoint(gcomp, ESMF_METHOD_INITIALIZE, &
-      userRoutine=InitializeP0, phase=0, rc=rc)
+         userRoutine=InitializeP0, phase=0, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
     ! set entry point for methods that require specific implementation
     call NUOPC_CompSetEntryPoint(gcomp, ESMF_METHOD_INITIALIZE, &
-      phaseLabelList=(/"IPDv01p1"/), userRoutine=InitializeAdvertise, rc=rc)
+         phaseLabelList=(/"IPDv01p1"/), userRoutine=InitializeAdvertise, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
     call NUOPC_CompSetEntryPoint(gcomp, ESMF_METHOD_INITIALIZE, &
-      phaseLabelList=(/"IPDv01p3"/), userRoutine=InitializeRealize, rc=rc)
+         phaseLabelList=(/"IPDv01p3"/), userRoutine=InitializeRealize, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
+
     ! attach specializing method(s)
     call NUOPC_CompSpecialize(gcomp, specLabel=model_label_Advance, &
-      specRoutine=SIS1_ModelAdvance_slow, rc=rc)
+         specRoutine=SIS1_ModelAdvance_slow, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
-!    call NUOPC_CompSpecialize(gcomp, specLabel=model_label_Finalize, &
-!      specRoutine=ice_model_finalize, rc=rc)
-!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!      line=__LINE__, &
-!      file=__FILE__)) &
-!      return  ! bail out
+    call NUOPC_CompSpecialize(gcomp, specLabel=model_label_Finalize, &
+         specRoutine=ice_model_finalize, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
     ! attach specializing method(s)
     ! No need to change clock settings
     call ESMF_MethodAdd(gcomp, label=model_label_SetClock, &
-      userRoutine=SetClock, rc=rc)
+         userRoutine=SetClock, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
+
   end subroutine SetServices
 
   !-----------------------------------------------------------------------------
@@ -186,67 +187,67 @@ module sis1_cap_mod
     type(ESMF_State)      :: importState, exportState
     type(ESMF_Clock)      :: clock
     integer, intent(out)  :: rc
-    
+
     character(len=10)                         :: value
 
     rc = ESMF_SUCCESS
 
     ! Switch to IPDv01 by filtering all other phaseMap entries
     call NUOPC_CompFilterPhaseMap(gcomp, ESMF_METHOD_INITIALIZE, &
-      acceptStringList=(/"IPDv01p"/), rc=rc)
+         acceptStringList=(/"IPDv01p"/), rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
     call ESMF_AttributeGet(gcomp, name="DumpFields", value=value, defaultValue="true", &
-      convention="NUOPC", purpose="Instance", rc=rc)
+         convention="NUOPC", purpose="Instance", rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
     write_diagnostics=(trim(value)=="true")
 
     call ESMF_AttributeGet(gcomp, name="ProfileMemory", value=value, defaultValue="true", &
-      convention="NUOPC", purpose="Instance", rc=rc)
+         convention="NUOPC", purpose="Instance", rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
     profile_memory=(trim(value)/="false")
 
     call ESMF_AttributeGet(gcomp, name="SIS1Solo", value=value, defaultValue="false", &
-      convention="NUOPC", purpose="Instance", rc=rc)
+         convention="NUOPC", purpose="Instance", rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
     ocean_solo=(trim(value)=="true")
 
     ! Retrieve restart_interval in (seconds)
     ! A restart_interval value of 0 means no restart will be written.
     call ESMF_AttributeGet(gcomp, name="restart_interval", value=value, defaultValue="0", &
-      convention="NUOPC", purpose="Instance", rc=rc)
+         convention="NUOPC", purpose="Instance", rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
     restart_interval = ESMF_UtilString2Int(value, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
     if(restart_interval < 0) then
-      call ESMF_LogSetError(ESMF_RC_NOT_VALID, &
-        msg="SIS1_CAP: SIS1 attribute: restart_interval cannot be negative.", &
-        line=__LINE__, &
-        file=__FILE__, rcToReturn=rc)
-      return
+       call ESMF_LogSetError(ESMF_RC_NOT_VALID, &
+            msg="SIS1_CAP: SIS1 attribute: restart_interval cannot be negative.", &
+            line=__LINE__, &
+            file=__FILE__, rcToReturn=rc)
+       return
     endif
     call ESMF_LogWrite('SIS1_CAP:restart_interval = '//trim(value), ESMF_LOGMSG_INFO, rc=dbrc)  
-    
-  end subroutine
-  
+
+  end subroutine InitializeP0
+
   !-----------------------------------------------------------------------------
   !> Called by NUOPC to advertise import and export fields.  "Advertise"
   !! simply means that the standard names of all import and export
@@ -268,7 +269,7 @@ module sis1_cap_mod
     type(ESMF_VM)                          :: vm
     type(ESMF_Time)                        :: MyTime
     type(ESMF_TimeInterval)                :: TINT
-    
+
     type(ice_data_type), pointer           :: ice_data          
     type(atmos_ice_boundary_type), pointer :: atmos_ice_boundary => NULL()
     type(ocean_ice_boundary_type), pointer :: ocean_ice_boundary => NULL()
@@ -302,36 +303,36 @@ module sis1_cap_mod
 
     call ESMF_VMGetCurrent(vm, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
     call ESMF_VMGet(VM, mpiCommunicator=mpi_comm_mom, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
     call ESMF_ClockGet(CLOCK, currTIME=MyTime, TimeStep=TINT,  RC=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
     call ESMF_TimeGet (MyTime,                    &
-                       YY=YEAR, MM=MONTH, DD=DAY, &
-                       H=HOUR,    M =MINUTE,    S =SECOND,  &
-                                        RC=rc )
+         YY=YEAR, MM=MONTH, DD=DAY, &
+         H=HOUR,    M =MINUTE,    S =SECOND,  &
+         RC=rc )
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
     CALL ESMF_TimeIntervalGet(TINT, S=DT_ICE, RC=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
     !
     !GFDL/FMS subroutines,  setup calls
@@ -359,11 +360,11 @@ module sis1_cap_mod
     call mpp_get_compute_domain(ice_data%domain, isc, iec, jsc, jec)
     !allocate and initialize ocean_ice_boundary
     allocate ( ocean_ice_boundary%u(isc:iec,jsc:jec),          &
-               ocean_ice_boundary%v(isc:iec,jsc:jec),          &
-               ocean_ice_boundary%t(isc:iec,jsc:jec),          &
-               ocean_ice_boundary%s(isc:iec,jsc:jec),          &
-               ocean_ice_boundary%frazil(isc:iec,jsc:jec),     &
-               ocean_ice_boundary%sea_level (isc:iec,jsc:jec)  )
+         ocean_ice_boundary%v(isc:iec,jsc:jec),          &
+         ocean_ice_boundary%t(isc:iec,jsc:jec),          &
+         ocean_ice_boundary%s(isc:iec,jsc:jec),          &
+         ocean_ice_boundary%frazil(isc:iec,jsc:jec),     &
+         ocean_ice_boundary%sea_level (isc:iec,jsc:jec)  )
 
     ocean_ice_boundary%u=0.0
     ocean_ice_boundary%v=0.0
@@ -410,32 +411,30 @@ module sis1_cap_mod
     atmos_ice_boundary%coszen=0.0
     atmos_ice_boundary%p=0.0
 
-!ice_data%t_surf = 274.0
-
     ice_internalstate%ptr%ice_data_type_ptr => ice_data
     call ESMF_GridCompSetInternalState(gcomp, ice_internalstate, rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
     call SIS1_FieldsSetup(atmos_ice_boundary, ocean_ice_boundary, ice_data,isc,iec,jsc,jec,kd)
 
     call SIS_AdvertiseFields(importState, fldsToIce_num, fldsToIce, rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
     call SIS_AdvertiseFields(exportState, fldsFrIce_num, fldsFrIce, rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
     write(*,*) '----- SIS1 initialization phase Advertise completed'
 
   end subroutine InitializeAdvertise
-  
+
   !-----------------------------------------------------------------------------
   !> Called by NUOPC to realize import and export fields.  "Realizing" a field
   !! means that its grid has been defined and an ESMF_Field object has been
@@ -459,7 +458,7 @@ module sis1_cap_mod
     type(ESMF_DeLayout)                    :: delayout
     type(ESMF_Distgrid)                    :: Distgrid
     type(ESMF_DistGridConnection), allocatable :: connectionList(:)
-    
+
     type(ice_data_type), pointer           :: ice_data          => NULL()
     type(atmos_ice_boundary_type), pointer :: atmos_ice_boundary => NULL()
     type(ocean_ice_boundary_type), pointer :: ocean_ice_boundary => NULL()
@@ -470,8 +469,8 @@ module sis1_cap_mod
     integer                                :: isc,iec,jsc,jec
     integer, allocatable                   :: xb(:),xe(:),yb(:),ye(:),pe(:)
     integer, allocatable                   :: deBlockList(:,:,:), &
-                                              petMap(:),deLabelList(:), &
-                                              indexList(:)
+         petMap(:),deLabelList(:), &
+         indexList(:)
     integer                                :: ioff, joff
     integer                                :: i, j, n, i1, j1, n1, icount
     integer                                :: lbnd1,ubnd1,lbnd2,ubnd2
@@ -494,9 +493,9 @@ module sis1_cap_mod
 
     call ESMF_GridCompGetInternalState(gcomp, ice_internalstate, rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
     ocean_ice_boundary => ice_internalstate%ptr%ocean_ice_boundary_type_ptr
     atmos_ice_boundary => ice_internalstate%ptr%atmos_ice_boundary_type_ptr
@@ -504,15 +503,15 @@ module sis1_cap_mod
 
     call ESMF_VMGetCurrent(vm, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
     call ESMF_VMGet(vm, petCount=npet, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
     !---------------------------------
     ! global mom grid size
@@ -528,12 +527,12 @@ module sis1_cap_mod
 
     ntiles=mpp_get_ntile_count(ice_data%domain) ! this is tiles on this pe
     if (ntiles /= 1) then
-      rc = ESMF_FAILURE
-      call ESMF_LogWrite(subname//' ntiles must be 1', ESMF_LOGMSG_ERROR, rc=dbrc)  
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-        line=__LINE__, &
-        file=__FILE__)) &
-        return  ! bail out
+       rc = ESMF_FAILURE
+       call ESMF_LogWrite(subname//' ntiles must be 1', ESMF_LOGMSG_ERROR, rc=dbrc)  
+       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+            line=__LINE__, &
+            file=__FILE__)) &
+            return  ! bail out
     endif
     ntiles=mpp_get_domain_npes(ice_data%domain)
     write(tmpstr,'(a,1i6)') subname//' ntiles = ',ntiles
@@ -547,8 +546,8 @@ module sis1_cap_mod
     call mpp_get_compute_domains(ice_data%domain, xbegin=xb, xend=xe, ybegin=yb, yend=ye)
     call mpp_get_pelist(ice_data%domain, pe)
     do n = 1,ntiles
-      write(tmpstr,'(a,6i6)') subname//' tiles ',n,pe(n),xb(n),xe(n),yb(n),ye(n)
-      call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)  
+       write(tmpstr,'(a,6i6)') subname//' tiles ',n,pe(n),xb(n),xe(n),yb(n),ye(n)
+       call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)  
     enddo
 
     !---------------------------------
@@ -577,34 +576,34 @@ module sis1_cap_mod
 
     delayout = ESMF_DELayoutCreate(petMap, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
+
     allocate(connectionList(2))
     ! bipolar boundary condition at top row: nyg
     call ESMF_DistGridConnectionSet(connectionList(1), tileIndexA=1, &
-      tileIndexB=1, positionVector=(/nxg+1, 2*nyg+1/), &
-      orientationVector=(/-1, -2/), rc=rc)
+         tileIndexB=1, positionVector=(/nxg+1, 2*nyg+1/), &
+         orientationVector=(/-1, -2/), rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
     ! periodic boundary condition along first dimension
     call ESMF_DistGridConnectionSet(connectionList(2), tileIndexA=1, &
-      tileIndexB=1, positionVector=(/nxg, 0/), rc=rc)
+         tileIndexB=1, positionVector=(/nxg, 0/), rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
     distgrid = ESMF_DistGridCreate(minIndex=(/1,1/), maxIndex=(/nxg,nyg/), &
-!        indexflag = ESMF_INDEX_DELOCAL, &
-        deBlockList=deBlockList, &
-!        deLabelList=deLabelList, &
-        delayout=delayout, &
-        connectionList=connectionList, &
-        rc=rc)
+                                !        indexflag = ESMF_INDEX_DELOCAL, &
+         deBlockList=deBlockList, &
+                                !        deLabelList=deLabelList, &
+         delayout=delayout, &
+         connectionList=connectionList, &
+         rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
     deallocate(xb,xe,yb,ye,pe)
@@ -627,80 +626,80 @@ module sis1_cap_mod
     !---------------------------------
 
     gridIn = ESMF_GridCreate(distgrid=distgrid, &
-       gridEdgeLWidth=(/0,0/), gridEdgeUWidth=(/0,1/), &
-       coordSys = ESMF_COORDSYS_SPH_DEG, &
-       rc = rc)
+         gridEdgeLWidth=(/0,0/), gridEdgeUWidth=(/0,1/), &
+         coordSys = ESMF_COORDSYS_SPH_DEG, &
+         rc = rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
     sis1_grid_i = gridIn
 
     call ESMF_GridAddCoord(gridIn, staggerLoc=ESMF_STAGGERLOC_CENTER, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
     call ESMF_GridAddCoord(gridIn, staggerLoc=ESMF_STAGGERLOC_CORNER, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
     call ESMF_GridAddItem(gridIn, itemFlag=ESMF_GRIDITEM_MASK, itemTypeKind=ESMF_TYPEKIND_I4, &
-       staggerLoc=ESMF_STAGGERLOC_CENTER, rc=rc)
+         staggerLoc=ESMF_STAGGERLOC_CENTER, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
     call ESMF_GridAddItem(gridIn, itemFlag=ESMF_GRIDITEM_AREA, itemTypeKind=ESMF_TYPEKIND_R8, &
-       staggerLoc=ESMF_STAGGERLOC_CENTER, rc=rc)
+         staggerLoc=ESMF_STAGGERLOC_CENTER, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
     call ESMF_GridGetCoord(gridIn, coordDim=1, &
-        staggerloc=ESMF_STAGGERLOC_CENTER, &
-        farrayPtr=dataPtr_xcen, rc=rc)
+         staggerloc=ESMF_STAGGERLOC_CENTER, &
+         farrayPtr=dataPtr_xcen, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
     call ESMF_GridGetCoord(gridIn, coordDim=2, &
-        staggerloc=ESMF_STAGGERLOC_CENTER, &
-        farrayPtr=dataPtr_ycen, rc=rc)
+         staggerloc=ESMF_STAGGERLOC_CENTER, &
+         farrayPtr=dataPtr_ycen, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
     call ESMF_GridGetCoord(gridIn, coordDim=1, &
-        staggerloc=ESMF_STAGGERLOC_CORNER, &
-        farrayPtr=dataPtr_xcor, rc=rc)
+         staggerloc=ESMF_STAGGERLOC_CORNER, &
+         farrayPtr=dataPtr_xcor, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
     call ESMF_GridGetCoord(gridIn, coordDim=2, &
-        staggerloc=ESMF_STAGGERLOC_CORNER, &
-        farrayPtr=dataPtr_ycor, rc=rc)
+         staggerloc=ESMF_STAGGERLOC_CORNER, &
+         farrayPtr=dataPtr_ycor, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
     call ESMF_GridGetItem(gridIn, itemflag=ESMF_GRIDITEM_MASK, &
-        staggerloc=ESMF_STAGGERLOC_CENTER, &
-        farrayPtr=dataPtr_mask, rc=rc)
+         staggerloc=ESMF_STAGGERLOC_CENTER, &
+         farrayPtr=dataPtr_mask, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
     call ESMF_GridGetItem(gridIn, itemflag=ESMF_GRIDITEM_AREA, &
-        staggerloc=ESMF_STAGGERLOC_CENTER, &
-        farrayPtr=dataPtr_area, rc=rc)
+         staggerloc=ESMF_STAGGERLOC_CENTER, &
+         farrayPtr=dataPtr_area, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
     !---------------------------------
     ! load up area, mask, center and corner values
@@ -733,15 +732,15 @@ module sis1_cap_mod
     if (iec-isc /= ubnd1-lbnd1 .or. jec-jsc /= ubnd2-lbnd2) then
        rc=ESMF_FAILURE
        call ESMF_LogSetError(ESMF_RC_ARG_BAD, &
-         msg=SUBNAME//": fld and grid do not have the same size.", &
-         line=__LINE__, file=__FILE__, rcToReturn=rc)
+            msg=SUBNAME//": fld and grid do not have the same size.", &
+            line=__LINE__, file=__FILE__, rcToReturn=rc)
        return  ! bail out
     endif
 
     allocate(ofld(isc:iec,jsc:jec))
     allocate(gfld(nxg,nyg))
 
-!   call ocean_model_data_get(Ocean_state, Ocean_sfc, 'mask', ofld, isc, jsc)
+    !   call ocean_model_data_get(Ocean_state, Ocean_sfc, 'mask', ofld, isc, jsc)
     ofld = 0.0
     where (ice_data%mask) ofld = 1.0
     write(tmpstr,*) subname//' ofld mask = ',minval(ofld),maxval(ofld)
@@ -750,15 +749,15 @@ module sis1_cap_mod
     write(tmpstr,*) subname//' gfld mask = ',minval(gfld),maxval(gfld)
     call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
     do j = lbnd2, ubnd2
-    do i = lbnd1, ubnd1
-       j1 = j - lbnd2 + jsc
-       i1 = i - lbnd1 + isc
-       dataPtr_mask(i,j) = nint(ofld(i1,j1))
-    enddo
+       do i = lbnd1, ubnd1
+          j1 = j - lbnd2 + jsc
+          i1 = i - lbnd1 + isc
+          dataPtr_mask(i,j) = nint(ofld(i1,j1))
+       enddo
     enddo
 
 
-!    call ocean_model_data_get(Ocean_state, Ocean_sfc, 'area', ofld, isc, jsc)
+    !    call ocean_model_data_get(Ocean_state, Ocean_sfc, 'area', ofld, isc, jsc)
     ofld = ice_data%area
     write(tmpstr,*) subname//' ofld area = ',minval(ofld),maxval(ofld)
     call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
@@ -766,14 +765,14 @@ module sis1_cap_mod
     write(tmpstr,*) subname//' gfld area = ',minval(gfld),maxval(gfld)
     call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
     do j = lbnd2, ubnd2
-    do i = lbnd1, ubnd1
-       j1 = j - lbnd2 + jsc
-       i1 = i - lbnd1 + isc
-       dataPtr_area(i,j) = ofld(i1,j1)
-    enddo
+       do i = lbnd1, ubnd1
+          j1 = j - lbnd2 + jsc
+          i1 = i - lbnd1 + isc
+          dataPtr_area(i,j) = ofld(i1,j1)
+       enddo
     enddo
 
-!    call ocean_model_data_get(Ocean_state, Ocean_sfc, 'tlon', ofld, isc, jsc)
+    !    call ocean_model_data_get(Ocean_state, Ocean_sfc, 'tlon', ofld, isc, jsc)
     ofld = geo_lon
     write(tmpstr,*) subname//' ofld xt = ',minval(ofld),maxval(ofld)
     call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
@@ -781,15 +780,15 @@ module sis1_cap_mod
     write(tmpstr,*) subname//' gfld xt = ',minval(gfld),maxval(gfld)
     call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
     do j = lbnd2, ubnd2
-    do i = lbnd1, ubnd1
-       j1 = j - lbnd2 + jsc
-       i1 = i - lbnd1 + isc
-       dataPtr_xcen(i,j) = ofld(i1,j1)
-       dataPtr_xcen(i,j) = mod(dataPtr_xcen(i,j)+720.0_ESMF_KIND_R8,360.0_ESMF_KIND_R8)
-    enddo
+       do i = lbnd1, ubnd1
+          j1 = j - lbnd2 + jsc
+          i1 = i - lbnd1 + isc
+          dataPtr_xcen(i,j) = ofld(i1,j1)
+          dataPtr_xcen(i,j) = mod(dataPtr_xcen(i,j)+720.0_ESMF_KIND_R8,360.0_ESMF_KIND_R8)
+       enddo
     enddo
 
-!    call ocean_model_data_get(Ocean_state, Ocean_sfc, 'tlat', ofld, isc, jsc)
+    !    call ocean_model_data_get(Ocean_state, Ocean_sfc, 'tlat', ofld, isc, jsc)
     ofld = geo_lat
     write(tmpstr,*) subname//' ofld yt = ',minval(ofld),maxval(ofld)
     call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
@@ -797,14 +796,14 @@ module sis1_cap_mod
     write(tmpstr,*) subname//' gfld yt = ',minval(gfld),maxval(gfld)
     call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
     do j = lbnd2, ubnd2
-    do i = lbnd1, ubnd1
-       j1 = j - lbnd2 + jsc
-       i1 = i - lbnd1 + isc
-       dataPtr_ycen(i,j) = ofld(i1,j1)
-    enddo
+       do i = lbnd1, ubnd1
+          j1 = j - lbnd2 + jsc
+          i1 = i - lbnd1 + isc
+          dataPtr_ycen(i,j) = ofld(i1,j1)
+       enddo
     enddo
 
-!    call ocean_model_data_get(Ocean_state, Ocean_sfc, 'ulon', ofld, isc, jsc)
+    !    call ocean_model_data_get(Ocean_state, Ocean_sfc, 'ulon', ofld, isc, jsc)
     ofld = geo_lonv_ib
     write(tmpstr,*) subname//' ofld xu = ',minval(ofld),maxval(ofld)
     call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
@@ -812,27 +811,27 @@ module sis1_cap_mod
     write(tmpstr,*) subname//' gfld xu = ',minval(gfld),maxval(gfld)
     call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
     do j = lbnd4, ubnd4
-    do i = lbnd3, ubnd3
-       j1 = j - lbnd4 + jsc - 1
-       i1 = mod(i - lbnd3 + isc - 2 + nxg, nxg) + 1
-       if (j1 == 0) then
-          dataPtr_xcor(i,j) = 2*gfld(i1,1) - gfld(i1,2)
-!          if (dataPtr_xcor(i,j)-dataPtr_xcen(i,j) > 180.) dataPtr_xcor(i,j) = dataPtr_xcor(i,j) - 360.
-!          if (dataPtr_xcor(i,j)-dataPtr_xcen(i,j) < 180.) dataPtr_xcor(i,j) = dataPtr_xcor(i,j) + 360.
-       elseif (j1 >= 1 .and. j1 <= nyg) then
-          dataPtr_xcor(i,j) = gfld(i1,j1)
-       else
-          rc=ESMF_FAILURE
-          call ESMF_LogWrite(subname//' error in xu j1', ESMF_LOGMSG_ERROR, rc=dbrc)
-          if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-       endif
-       dataPtr_xcor(i,j) = mod(dataPtr_xcor(i,j)+720.0_ESMF_KIND_R8,360.0_ESMF_KIND_R8)
-       ! write(tmpstr,*) subname//' ijfld xu = ',i,i1,j,j1,dataPtr_xcor(i,j)
-       ! call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
-    enddo
+       do i = lbnd3, ubnd3
+          j1 = j - lbnd4 + jsc - 1
+          i1 = mod(i - lbnd3 + isc - 2 + nxg, nxg) + 1
+          if (j1 == 0) then
+             dataPtr_xcor(i,j) = 2*gfld(i1,1) - gfld(i1,2)
+             !          if (dataPtr_xcor(i,j)-dataPtr_xcen(i,j) > 180.) dataPtr_xcor(i,j) = dataPtr_xcor(i,j) - 360.
+             !          if (dataPtr_xcor(i,j)-dataPtr_xcen(i,j) < 180.) dataPtr_xcor(i,j) = dataPtr_xcor(i,j) + 360.
+          elseif (j1 >= 1 .and. j1 <= nyg) then
+             dataPtr_xcor(i,j) = gfld(i1,j1)
+          else
+             rc=ESMF_FAILURE
+             call ESMF_LogWrite(subname//' error in xu j1', ESMF_LOGMSG_ERROR, rc=dbrc)
+             if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+          endif
+          dataPtr_xcor(i,j) = mod(dataPtr_xcor(i,j)+720.0_ESMF_KIND_R8,360.0_ESMF_KIND_R8)
+          ! write(tmpstr,*) subname//' ijfld xu = ',i,i1,j,j1,dataPtr_xcor(i,j)
+          ! call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
+       enddo
     enddo
 
-!    call ocean_model_data_get(Ocean_state, Ocean_sfc, 'ulat', ofld, isc, jsc)
+    !    call ocean_model_data_get(Ocean_state, Ocean_sfc, 'ulat', ofld, isc, jsc)
     ofld = geo_latv_ib
     write(tmpstr,*) subname//' ofld yu = ',minval(ofld),maxval(ofld)
     call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
@@ -840,21 +839,21 @@ module sis1_cap_mod
     write(tmpstr,*) subname//' gfld yu = ',minval(gfld),maxval(gfld)
     call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
     do j = lbnd4, ubnd4
-    do i = lbnd3, ubnd3
-       j1 = j - lbnd4 + jsc - 1
-       i1 = mod(i - lbnd3 + isc - 2 + nxg, nxg) + 1
-       if (j1 == 0) then
-          dataPtr_ycor(i,j) = 2*gfld(i1,1) - gfld(i1,2)
-       elseif (j1 >= 1 .and. j1 <= nyg) then
-          dataPtr_ycor(i,j) = gfld(i1,j1)
-       else
-          rc=ESMF_FAILURE
-          call ESMF_LogWrite(subname//' error in xu j1', ESMF_LOGMSG_ERROR, rc=dbrc)
-          if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-       endif
-       ! write(tmpstr,*) subname//' ijfld yu = ',i,i1,j,j1,dataPtr_ycor(i,j)
-       ! call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
-    enddo
+       do i = lbnd3, ubnd3
+          j1 = j - lbnd4 + jsc - 1
+          i1 = mod(i - lbnd3 + isc - 2 + nxg, nxg) + 1
+          if (j1 == 0) then
+             dataPtr_ycor(i,j) = 2*gfld(i1,1) - gfld(i1,2)
+          elseif (j1 >= 1 .and. j1 <= nyg) then
+             dataPtr_ycor(i,j) = gfld(i1,j1)
+          else
+             rc=ESMF_FAILURE
+             call ESMF_LogWrite(subname//' error in xu j1', ESMF_LOGMSG_ERROR, rc=dbrc)
+             if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+          endif
+          ! write(tmpstr,*) subname//' ijfld yu = ',i,i1,j,j1,dataPtr_ycor(i,j)
+          ! call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
+       enddo
     enddo
 
     write(tmpstr,*) subname//' mask = ',minval(dataPtr_mask),maxval(dataPtr_mask)
@@ -877,13 +876,13 @@ module sis1_cap_mod
 
     !Debug grid
     call ESMF_GridGet(gridIn, tile=1, &
-        staggerloc=ESMF_STAGGERLOC_CENTER, &
-        minIndex=minIndex, maxIndex=maxIndex,&
-        rc=rc)
+         staggerloc=ESMF_STAGGERLOC_CENTER, &
+         minIndex=minIndex, maxIndex=maxIndex,&
+         rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
     write(tmpstr,*) subname//' minmaxIndex = ',minIndex,maxIndex
     call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
 
@@ -897,61 +896,61 @@ module sis1_cap_mod
 
     call SIS_RealizeFields(importState, gridIn , fldsToIce_num, fldsToIce, "Ice import", rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
     call SIS_RealizeFields(exportState, gridOut, fldsFrIce_num, fldsFrIce, "Ice export", rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
     ! Set ice_mask and ice_fraction
-     call ESMF_StateGet(exportState, itemName='ice_mask', field=field_ice_mask, rc=rc)
-     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-        line=__LINE__, &
-        file=__FILE__)) &
-        return  ! bail out
-      call ESMF_FieldGet(field_ice_mask, localDe=0, farrayPtr=dataPtr_rmask, rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-        line=__LINE__, &
-        file=__FILE__)) &
-        return  ! bail out
+    call ESMF_StateGet(exportState, itemName='ice_mask', field=field_ice_mask, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
+    call ESMF_FieldGet(field_ice_mask, localDe=0, farrayPtr=dataPtr_rmask, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
-     call ESMF_StateGet(exportState, itemName='ice_fraction', field=field_ice_frac, rc=rc)
-     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-        line=__LINE__, &
-        file=__FILE__)) &
-        return  ! bail out
-      call ESMF_FieldGet(field_ice_frac, localDe=0, farrayPtr=dataPtr_frac, rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-        line=__LINE__, &
-        file=__FILE__)) &
-        return  ! bail out
+    call ESMF_StateGet(exportState, itemName='ice_fraction', field=field_ice_frac, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
+    call ESMF_FieldGet(field_ice_frac, localDe=0, farrayPtr=dataPtr_frac, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
 
-      lbnd1 = lbound(dataPtr_rmask,1)
-      ubnd1 = ubound(dataPtr_rmask,1)
-      lbnd2 = lbound(dataPtr_rmask,2)
-      ubnd2 = ubound(dataPtr_rmask,2)
-      do j = lbnd2, ubnd2
-      do i = lbnd1, ubnd1
-         j1 = j - lbnd2 + jsc
-         i1 = i - lbnd1 + isc
-         dataPtr_frac(i,j) = 1.0 - ice_data%part_size(i1,j1,1)
-         dataPtr_rmask(i,j) = 0.0
-         if (ice_data%part_size(i1,j1,1) < 1.0) dataPtr_rmask(i,j) = 1.0
-      enddo
-      enddo
+    lbnd1 = lbound(dataPtr_rmask,1)
+    ubnd1 = ubound(dataPtr_rmask,1)
+    lbnd2 = lbound(dataPtr_rmask,2)
+    ubnd2 = ubound(dataPtr_rmask,2)
+    do j = lbnd2, ubnd2
+       do i = lbnd1, ubnd1
+          j1 = j - lbnd2 + jsc
+          i1 = i - lbnd1 + isc
+          dataPtr_frac(i,j) = 1.0 - ice_data%part_size(i1,j1,1)
+          dataPtr_rmask(i,j) = 0.0
+          if (ice_data%part_size(i1,j1,1) < 1.0) dataPtr_rmask(i,j) = 1.0
+       enddo
+    enddo
 
     deallocate(ofld)
 
     call NUOPC_Write(exportState, fileNamePrefix='init_field_ice_export_', &
-      timeslice=1, relaxedFlag=.true., rc=rc) 
+         timeslice=1, relaxedFlag=.true., rc=rc) 
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
 
     write(*,*) '----- SIS1 initialization phase Realize completed'
@@ -964,46 +963,46 @@ module sis1_cap_mod
   subroutine SetClock(gcomp, rc)
     type(ESMF_GridComp)  :: gcomp
     integer, intent(out) :: rc
-    
+
     ! local variables
     type(ESMF_Clock)              :: clock
     type(ESMF_TimeInterval)       :: stabilityTimeStep, timestep
     character(len=*),parameter  :: subname='(sis1_cap:SetClock)'
     real, parameter :: dt=900
     rc = ESMF_SUCCESS
-    
+
     ! query the Component for its clock, importState and exportState
     call ESMF_GridCompGet(gcomp, clock=clock, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
     call ESMF_TimeIntervalSet(timestep, s=nint(dt), rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
     call ESMF_ClockSet(clock, timestep=timestep, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
     ! initialize internal clock
     ! here: parent Clock and stability timeStep determine actual model timeStep
     call ESMF_TimeIntervalSet(stabilityTimeStep, s=nint(dt), rc=rc) 
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
     call NUOPC_CompSetClock(gcomp, clock, stabilityTimeStep, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
+
   end subroutine SetClock
 
   !-----------------------------------------------------------------------------
@@ -1022,21 +1021,21 @@ module sis1_cap_mod
 
     do i = 1, nfields
 
-      call ESMF_LogWrite('Advertise: '//trim(field_defs(i)%stdname), ESMF_LOGMSG_INFO, rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-        line=__LINE__, &
-        file=__FILE__)) &
-        return  ! bail out
+       call ESMF_LogWrite('Advertise: '//trim(field_defs(i)%stdname), ESMF_LOGMSG_INFO, rc=rc)
+       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+            line=__LINE__, &
+            file=__FILE__)) &
+            return  ! bail out
 
-      call NUOPC_Advertise(state, &
-        standardName=field_defs(i)%stdname, &
-        name=field_defs(i)%shortname, &
-        TransferOfferGeomObject="will provide", &
-        rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-        line=__LINE__, &
-        file=__FILE__)) &
-        return  ! bail out
+       call NUOPC_Advertise(state, &
+            standardName=field_defs(i)%stdname, &
+            name=field_defs(i)%shortname, &
+            TransferOfferGeomObject="will provide", &
+            rc=rc)
+       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+            line=__LINE__, &
+            file=__FILE__)) &
+            return  ! bail out
 
     enddo
 
@@ -1062,58 +1061,58 @@ module sis1_cap_mod
 
     do i = 1, nfields
 
-      if (field_defs(i)%assoc) then
-        write(tmpstr, *) subname, tag, ' Field ', field_defs(i)%shortname, ':', &
-          lbound(field_defs(i)%farrayPtr,1), ubound(field_defs(i)%farrayPtr,1), &
-          lbound(field_defs(i)%farrayPtr,2), ubound(field_defs(i)%farrayPtr,2)
-        call ESMF_LogWrite(tmpstr, ESMF_LOGMSG_INFO, rc=dbrc)
-        field = ESMF_FieldCreate(grid=grid, &
-          farray=field_defs(i)%farrayPtr, indexflag=ESMF_INDEX_DELOCAL, &
-          name=field_defs(i)%shortname, rc=rc)
-        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-          line=__LINE__, &
-          file=__FILE__)) &
-          return  ! bail out
-      else
-        field = ESMF_FieldCreate(grid, ESMF_TYPEKIND_R8, indexflag=ESMF_INDEX_DELOCAL, &
-          name=field_defs(i)%shortname, rc=rc)
-        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-          line=__LINE__, &
-          file=__FILE__)) &
-          return  ! bail out
-      endif
+       if (field_defs(i)%assoc) then
+          write(tmpstr, *) subname, tag, ' Field ', field_defs(i)%shortname, ':', &
+               lbound(field_defs(i)%farrayPtr,1), ubound(field_defs(i)%farrayPtr,1), &
+               lbound(field_defs(i)%farrayPtr,2), ubound(field_defs(i)%farrayPtr,2)
+          call ESMF_LogWrite(tmpstr, ESMF_LOGMSG_INFO, rc=dbrc)
+          field = ESMF_FieldCreate(grid=grid, &
+               farray=field_defs(i)%farrayPtr, indexflag=ESMF_INDEX_DELOCAL, &
+               name=field_defs(i)%shortname, rc=rc)
+          if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+               line=__LINE__, &
+               file=__FILE__)) &
+               return  ! bail out
+       else
+          field = ESMF_FieldCreate(grid, ESMF_TYPEKIND_R8, indexflag=ESMF_INDEX_DELOCAL, &
+               name=field_defs(i)%shortname, rc=rc)
+          if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+               line=__LINE__, &
+               file=__FILE__)) &
+               return  ! bail out
+       endif
 
-      if (NUOPC_IsConnected(state, fieldName=field_defs(i)%shortname)) then
-        call NUOPC_Realize(state, field=field, rc=rc)
-        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-          line=__LINE__, &
-          file=__FILE__)) &
-          return  ! bail out
-        call ESMF_LogWrite(subname // tag // " Field "// field_defs(i)%stdname // " is connected.", &
-          ESMF_LOGMSG_INFO, &
-          line=__LINE__, &
-          file=__FILE__, &
-          rc=dbrc)
-!        call ESMF_FieldPrint(field=field, rc=rc)
-!        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
-      else
-        call ESMF_LogWrite(subname // tag // " Field "// field_defs(i)%stdname // " is not connected.", &
-          ESMF_LOGMSG_INFO, &
-          line=__LINE__, &
-          file=__FILE__, &
-          rc=dbrc)
-        ! TODO: Initialize the value in the pointer to 0 after proper restart is setup
-        !if(associated(field_defs(i)%farrayPtr) ) field_defs(i)%farrayPtr = 0.0
-        ! remove a not connected Field from State
-        call ESMF_StateRemove(state, (/field_defs(i)%shortname/), rc=rc)
-        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-          line=__LINE__, &
-          file=__FILE__)) &
-          return  ! bail out
-      endif
+       if (NUOPC_IsConnected(state, fieldName=field_defs(i)%shortname)) then
+          call NUOPC_Realize(state, field=field, rc=rc)
+          if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+               line=__LINE__, &
+               file=__FILE__)) &
+               return  ! bail out
+          call ESMF_LogWrite(subname // tag // " Field "// field_defs(i)%stdname // " is connected.", &
+               ESMF_LOGMSG_INFO, &
+               line=__LINE__, &
+               file=__FILE__, &
+               rc=dbrc)
+          !        call ESMF_FieldPrint(field=field, rc=rc)
+          !        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+          !          line=__LINE__, &
+          !          file=__FILE__)) &
+          !          return  ! bail out
+       else
+          call ESMF_LogWrite(subname // tag // " Field "// field_defs(i)%stdname // " is not connected.", &
+               ESMF_LOGMSG_INFO, &
+               line=__LINE__, &
+               file=__FILE__, &
+               rc=dbrc)
+          ! TODO: Initialize the value in the pointer to 0 after proper restart is setup
+          !if(associated(field_defs(i)%farrayPtr) ) field_defs(i)%farrayPtr = 0.0
+          ! remove a not connected Field from State
+          call ESMF_StateRemove(state, (/field_defs(i)%shortname/), rc=rc)
+          if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+               line=__LINE__, &
+               file=__FILE__)) &
+               return  ! bail out
+       endif
 
     enddo
 
@@ -1122,7 +1121,7 @@ module sis1_cap_mod
   subroutine SIS1_ModelAdvance_slow(gcomp, rc)
     type(ESMF_GridComp)                    :: gcomp
     integer, intent(out)                   :: rc
-    
+
     ! local variables
     type(ESMF_Clock)                       :: clock
     type(ESMF_State)                       :: importState, exportState
@@ -1139,6 +1138,16 @@ module sis1_cap_mod
     real(ESMF_KIND_R8)                     :: sigma_r, sigma_l, sigma_c
     type(ESMF_StateItem_Flag)              :: itemType
     ! imports
+    type(ice_data_type), pointer           :: ice_data          => NULL()
+    type(atmos_ice_boundary_type), pointer :: atmos_ice_boundary => NULL()
+    type(ocean_ice_boundary_type), pointer :: ocean_ice_boundary => NULL()
+    type(ice_internalstate_wrapper)        :: ice_internalstate
+    ! define some time types 
+    type(time_type)                        :: Time        
+    type(time_type)                        :: Time_step_coupled
+    type(time_type)                        :: Time_restart_current
+
+    integer :: dth, dtm, dts, dt_cpld  = 86400
 
     character(240)              :: msgString
     character(len=*),parameter  :: subname='(sis1_cap:ModelAdvance_slow)'
@@ -1147,77 +1156,325 @@ module sis1_cap_mod
     if(profile_memory) call ESMF_VMLogMemInfo("Entering sis1_cap:ModelAdvance_slow ")
     write(*,*) subname,' --- run phase 1 called --- '
 
-    
+
     ! query the Component for its clock, importState and exportState
     call ESMF_GridCompGet(gcomp, clock=clock, importState=importState, &
-      exportState=exportState, rc=rc)
+         exportState=exportState, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
+
+    call ESMF_GridCompGetInternalState(gcomp, ice_internalstate, rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
+
+    ocean_ice_boundary => ice_internalstate%ptr%ocean_ice_boundary_type_ptr
+    atmos_ice_boundary => ice_internalstate%ptr%atmos_ice_boundary_type_ptr
+    ice_data           => ice_internalstate%ptr%ice_data_type_ptr
 
     ! HERE THE MODEL ADVANCES: currTime -> currTime + timeStep
-    
+
     ! Because of the way that the internal Clock was set in SetClock(),
     ! its timeStep is likely smaller than the parent timeStep. As a consequence
     ! the time interval covered by a single parent timeStep will result in 
     ! multiple calls to the ModelAdvance() routine. Every time the currTime
     ! will come in by one internal timeStep advanced. This goes until the
     ! stopTime of the internal Clock has been reached.
-    
+
     call ESMF_ClockPrint(clock, options="currTime", &
-      preString="------>Advancing SIS1 from: ", unit=msgString, rc=rc)
+         preString="------>Advancing SIS1 from: ", unit=msgString, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
     call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
+
     call ESMF_ClockGet(clock, currTime=currTime, timeStep=timeStep, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
+
     call ESMF_TimePrint(currTime + timeStep, &
-      preString="--------------------------------> to: ", &
-      unit=msgString, rc=rc)
+         preString="--------------------------------> to: ", &
+         unit=msgString, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
     call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
-!    call State_getFldPtr(importState,'mean_down_sw_vis_dir_flx',dataPtr_swvr,rc=rc)
-!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call ESMF_TimeIntervalGet(timeStep, h=dth, m=dtm, s=dts, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
 
-   write(*,*) subname,' --- run phase 2 called --- '
-!    call ESMF_LogWrite(info, ESMF_LOGMSG_INFO, rc=dbrc)
-!    if(profile_memory) call ESMF_VMLogMemInfo("Before CICE_Run")
-!    call CICE_Run
-!    if(profile_memory) call ESMF_VMLogMemInfo("Afterr CICE_Run")
-    write(*,*) subname,' --- run phase 3 called --- '
-!    call ESMF_LogWrite(info, ESMF_LOGMSG_INFO, rc=dbrc)
+    Time = esmf2fms_time(currTime)
+    Time_step_coupled = esmf2fms_time(timeStep)
+    dt_cpld = dth*3600+dtm*60+dts
+
+    if(write_diagnostics) then
+       call NUOPC_Write(importState, fileNamePrefix='field_ice_import_', &
+            timeslice=import_slice, relaxedFlag=.true., rc=rc) 
+       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+            line=__LINE__, &
+            file=__FILE__)) &
+            return  ! bail out
+       import_slice = import_slice + 1
+    endif
+
+    !Prepare upper BC atmos_ice_boundary
+
+    call prepare_imports(exportState,importState,ice_data,atmos_ice_boundary,rc)
+
+    write(*,*) subname,' --- calling run phase update_ice_model_slow_up --- '
+    !!    if(profile_memory) call ESMF_VMLogMemInfo("Before update_ice_model_slow_up")
+
+    call update_ice_model_slow_up(ocean_ice_boundary, ice_data)
+
+    !!    if(profile_memory) call ESMF_VMLogMemInfo("Afterr update_ice_model_slow_up")
+
+    write(*,*) subname,' --- calling run phase update_ice_model_fast --- '
+    call update_ice_model_fast (atmos_ice_boundary, ice_data)
+
+    write(*,*) subname,' --- calling run phase update_ice_model_slow --- '
+    call update_ice_model_slow(ice_data)
 
     !---- local modifications to coupling fields -----
 
-!    call State_getFldPtr(exportState,'ice_mask',dataPtr_mask,rc=rc)
-!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
-!    call State_getFldPtr(exportState,'ice_fraction',dataPtr_ifrac,rc=rc)
-!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
-!    call State_getFldPtr(exportState,'sea_ice_temperature',dataPtr_itemp,rc=rc)
-!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call prepare_exports(exportState,importState,ice_data,atmos_ice_boundary,rc)
+    !    call State_getFldPtr(exportState,'ice_mask',dataPtr_mask,rc=rc)
+    !    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
 
   end subroutine SIS1_ModelAdvance_slow
 
+  subroutine prepare_imports(exportState,importState,ice_data,atmos_ice_boundary,rc)
+    type(ESMF_State),              intent(in)    :: exportState,importState
+    type(ice_data_type),           intent(in)    :: ice_data
+    type(atmos_ice_boundary_type), intent(inout) :: atmos_ice_boundary
+    integer                      , intent(out)   :: rc
+    !locals
+    real(ESMF_KIND_R8), pointer :: dataPtr_frac(:,:),dataPtr(:,:)
+    integer :: isc,iec,jsc,jec,lbnd1,ubnd1,lbnd2,ubnd2,i,j,i1,j1
+    character(len=*),parameter  :: subname='(sis1_cap:prepare_imports)'
+
+    !Niki: We have to redistribute the mediator 2D fields to the 3D fields of ice categories.
+    !      This has to be done properly by a flux exchange scheme. In the absense of such,
+    !      here's a very simple way of doing it by using the ice partition size as a weight.
+
+    call State_getFldPtr(exportState,'ice_fraction',dataPtr_frac,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+
+    lbnd1 = lbound(dataPtr_frac,1)
+    ubnd1 = ubound(dataPtr_frac,1)
+    lbnd2 = lbound(dataPtr_frac,2)
+    ubnd2 = ubound(dataPtr_frac,2)
+
+    call mpp_get_compute_domain(ice_data%domain, isc, iec, jsc, jec)
+
+    call State_getFldPtr(importState,'mean_down_sw_vis_dir_flx',dataPtr,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    do j = lbnd2, ubnd2; do i = lbnd1, ubnd1
+       j1 = j - lbnd2 + jsc ; i1 = i - lbnd1 + isc
+       atmos_ice_boundary%sw_flux_vis_dir(i1,j1,:) = dataPtr(i,j) * ice_data%part_size(i1,j1,:) 
+    enddo; enddo
+
+    call State_getFldPtr(importState,'mean_down_sw_vis_dif_flx',dataPtr,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    do j = lbnd2, ubnd2; do i = lbnd1, ubnd1
+       j1 = j - lbnd2 + jsc ; i1 = i - lbnd1 + isc
+       atmos_ice_boundary%sw_flux_vis_dif(i1,j1,:) = dataPtr(i,j) * ice_data%part_size(i1,j1,:) 
+    enddo; enddo
+
+    call State_getFldPtr(importState,'mean_down_sw_ir_dir_flx',dataPtr,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    do j = lbnd2, ubnd2; do i = lbnd1, ubnd1
+       j1 = j - lbnd2 + jsc ; i1 = i - lbnd1 + isc
+       atmos_ice_boundary%sw_flux_vis_dir(i1,j1,:) = dataPtr(i,j) * ice_data%part_size(i1,j1,:) 
+    enddo; enddo
+
+    call State_getFldPtr(importState,'mean_down_sw_ir_dif_flx',dataPtr,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    do j = lbnd2, ubnd2; do i = lbnd1, ubnd1
+       j1 = j - lbnd2 + jsc ; i1 = i - lbnd1 + isc
+       atmos_ice_boundary%sw_flux_nir_dif(i1,j1,:) = dataPtr(i,j) * ice_data%part_size(i1,j1,:) 
+    enddo; enddo
+
+    call State_getFldPtr(importState,'mean_down_lw_flx',dataPtr,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    do j = lbnd2, ubnd2; do i = lbnd1, ubnd1
+       j1 = j - lbnd2 + jsc ; i1 = i - lbnd1 + isc
+       atmos_ice_boundary%lw_flux(i1,j1,:) = dataPtr(i,j) * ice_data%part_size(i1,j1,:) 
+    enddo; enddo
+
+    call State_getFldPtr(importState,'mean_prec_rate',dataPtr,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    do j = lbnd2, ubnd2; do i = lbnd1, ubnd1
+       j1 = j - lbnd2 + jsc ; i1 = i - lbnd1 + isc
+       atmos_ice_boundary%lprec(i1,j1,:) = dataPtr(i,j) * ice_data%part_size(i1,j1,:) 
+    enddo; enddo
+
+    call State_getFldPtr(importState,'mean_fprec_rate',dataPtr,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    do j = lbnd2, ubnd2; do i = lbnd1, ubnd1
+       j1 = j - lbnd2 + jsc ; i1 = i - lbnd1 + isc
+       atmos_ice_boundary%fprec(i1,j1,:) = dataPtr(i,j) * ice_data%part_size(i1,j1,:) 
+    enddo; enddo
+
+    call State_getFldPtr(importState,'mean_zonal_moment_flx',dataPtr,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    do j = lbnd2, ubnd2; do i = lbnd1, ubnd1
+       j1 = j - lbnd2 + jsc ; i1 = i - lbnd1 + isc
+       atmos_ice_boundary%u_flux(i1,j1,:) = dataPtr(i,j) * ice_data%part_size(i1,j1,:) 
+    enddo; enddo
+
+    call State_getFldPtr(importState,'mean_merid_moment_flx',dataPtr,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    do j = lbnd2, ubnd2; do i = lbnd1, ubnd1
+       j1 = j - lbnd2 + jsc ; i1 = i - lbnd1 + isc
+       atmos_ice_boundary%v_flux(i1,j1,:) = dataPtr(i,j) * ice_data%part_size(i1,j1,:) 
+    enddo; enddo
+
+  end subroutine prepare_imports
+
+  subroutine prepare_exports(exportState,importState,ice_data,atmos_ice_boundary,rc)
+    type(ESMF_State),              intent(in)    :: exportState,importState
+    type(ice_data_type),           intent(in)    :: ice_data
+    type(atmos_ice_boundary_type), intent(inout) :: atmos_ice_boundary
+    integer                      , intent(out)   :: rc
+    !locals
+    real(ESMF_KIND_R8), pointer :: dataPtr_frac(:,:),dataPtr(:,:)
+    integer :: isc,iec,jsc,jec,lbnd1,ubnd1,lbnd2,ubnd2,i,j,i1,j1
+    character(len=*),parameter  :: subname='(sis1_cap:prepare_exports)'
+
+    !Niki: We have to redistribute the mediator 2D fields to the 3D fields of ice categories.
+    !      This has to be done properly by a flux exchange scheme. In the absense of such,
+    !      here's a very simple way of doing it by using the ice partition size as a weight.
+
+    call State_getFldPtr(exportState,'ice_fraction',dataPtr_frac,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+
+    lbnd1 = lbound(dataPtr_frac,1)
+    ubnd1 = ubound(dataPtr_frac,1)
+    lbnd2 = lbound(dataPtr_frac,2)
+    ubnd2 = ubound(dataPtr_frac,2)
+
+    call mpp_get_compute_domain(ice_data%domain, isc, iec, jsc, jec)
+
+    do j = lbnd2, ubnd2; do i = lbnd1, ubnd1
+       j1 = j - lbnd2 + jsc ; i1 = i - lbnd1 + isc
+       dataPtr_frac(i,j) = 1.0 - ice_data%part_size(i1,j1,1)
+    enddo; enddo
+
+    call State_getFldPtr(exportState,'ice_mask',dataPtr,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    do j = lbnd2, ubnd2; do i = lbnd1, ubnd1
+       j1 = j - lbnd2 + jsc ; i1 = i - lbnd1 + isc
+       dataPtr(i,j) = 0.0
+       if (ice_data%part_size(i1,j1,1) < 1.0) dataPtr(i,j) = 1.0 
+    enddo; enddo
+
+
+    call State_getFldPtr(exportState,'sea_ice_temperature',dataPtr,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call part_avg(dataPtr, ice_data%t_surf, ice_data%part_size,isc, jsc)
+
+    call State_getFldPtr(exportState,'inst_ice_vis_dir_albedo',dataPtr,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call part_avg(dataPtr, ice_data%albedo_vis_dir, ice_data%part_size,isc, jsc)
+
+    call State_getFldPtr(exportState,'inst_ice_ir_dir_albedo',dataPtr,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call part_avg(dataPtr, ice_data%albedo_nir_dir, ice_data%part_size,isc, jsc)
+
+    call State_getFldPtr(exportState,'inst_ice_vis_dif_albedo',dataPtr,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call part_avg(dataPtr, ice_data%albedo_vis_dif, ice_data%part_size,isc, jsc)
+
+    call State_getFldPtr(exportState,'inst_ice_ir_dif_albedo',dataPtr,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call part_avg(dataPtr, ice_data%albedo_nir_dif, ice_data%part_size,isc, jsc)
+
+
+  end subroutine prepare_exports
+
+  !Perform an average over ice partitions to make 2d data from 3d
+  subroutine part_avg(dataPtr, x_3d, part, isc, jsc)
+    real(ESMF_KIND_R8), dimension(:,:), pointer        :: dataPtr
+    real*8, dimension(:,:,:),  intent(in) :: x_3d, part
+    integer,                 intent(in) :: isc, jsc
+    integer :: lbnd1,ubnd1,lbnd2,ubnd2,i,j,i1,j1,k
+
+    dataPtr(:,:) = 0.0
+    do j = lbnd2, ubnd2; do i = lbnd1, ubnd1
+       j1 = j - lbnd2 + jsc ; i1 = i - lbnd1 + isc
+       do k=1,size(part,3)
+          dataPtr(i,j) = dataPtr(i,j) + part(i1,j1,k) * x_3d(i1,j1,k)
+       enddo
+    enddo; enddo
+  end subroutine part_avg
+
+  subroutine ice_model_finalize(gcomp, rc)
+
+    ! input arguments
+    type(ESMF_GridComp)  :: gcomp
+    integer, intent(out) :: rc
+
+    ! local variables
+    type(ice_data_type), pointer           :: ice_data          => NULL()
+    type(ice_internalstate_wrapper)        :: ice_internalstate
+    type(TIME_TYPE)                        :: Time        
+    type(ESMF_Clock)                       :: clock
+    type(ESMF_Time)                        :: currTime
+    character(len=*),parameter  :: subname='(sis1_cap:ice_model_finalize)'
+
+    write(*,*) 'SIS1: --- finalize called ---'
+    rc = ESMF_SUCCESS
+
+    call ESMF_GridCompGetInternalState(gcomp, ice_internalstate, rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
+
+    ice_data           => ice_internalstate%ptr%ice_data_type_ptr
+
+    call NUOPC_ModelGet(gcomp, modelClock=clock, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
+
+    call ESMF_ClockGet(clock, currTime=currTime, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
+
+    Time = esmf2fms_time(currTime)
+
+    call ice_model_end (ice_data)
+    call diag_manager_end (Time )
+    call field_manager_end
+
+    call fms_io_exit
+    call fms_end
+
+    write(*,*) 'SIS1: --- completed ---'
+
+  end subroutine ice_model_finalize
 
   subroutine SIS1_FieldsSetup(atmos_ice_boundary, ocean_ice_boundary, ice_data,isc,iec,jsc,jec,kd)
     type(ice_data_type),           intent(in) :: ice_data
@@ -1229,12 +1486,12 @@ module sis1_cap_mod
     real,dimension(isc:iec,jsc:jec) :: temp_array1
 
 
-!--------- import fields to Sea Ice -------------
+    !--------- import fields to Sea Ice -------------
 
-! tcraig, don't point directly into cice data YET (last field is optional in interface)
-! instead, create space for the field when it's "realized".
+    ! tcraig, don't point directly into cice data YET (last field is optional in interface)
+    ! instead, create space for the field when it's "realized".
 
- 
+
     !From ATM
     !Niki: Have to have at least onean import field "dummyfield"  without providing the data argument, 
     !      otherwise ESMF fails like:
@@ -1255,98 +1512,101 @@ module sis1_cap_mod
     !Actual import fields for SIS
     !
     call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_lw_flx"         , &
-                                                data=atmos_ice_boundary%lw_flux(isc:iec,jsc:jec,1))
+         data=atmos_ice_boundary%lw_flux(isc:iec,jsc:jec,1))
     call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_vis_dir_flx" ,&
-                                                data=atmos_ice_boundary%sw_flux_vis_dir(isc:iec,jsc:jec,1))
+         data=atmos_ice_boundary%sw_flux_vis_dir(isc:iec,jsc:jec,1))
     call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_vis_dif_flx" , &
-                                                data=atmos_ice_boundary%sw_flux_vis_dif(isc:iec,jsc:jec,1))
+         data=atmos_ice_boundary%sw_flux_vis_dif(isc:iec,jsc:jec,1))
     call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_ir_dir_flx"  , &
-                                                data=atmos_ice_boundary%sw_flux_vis_dir(isc:iec,jsc:jec,1))
+         data=atmos_ice_boundary%sw_flux_vis_dir(isc:iec,jsc:jec,1))
     call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_ir_dif_flx"  , &
-                                                data=atmos_ice_boundary%sw_flux_nir_dif(isc:iec,jsc:jec,1))
+         data=atmos_ice_boundary%sw_flux_nir_dif(isc:iec,jsc:jec,1))
     call fld_list_add(fldsToIce_num, fldsToIce, "mean_prec_rate"           , &
-                                                data=atmos_ice_boundary%lprec(isc:iec,jsc:jec,1))
+         data=atmos_ice_boundary%lprec(isc:iec,jsc:jec,1))
     call fld_list_add(fldsToIce_num, fldsToIce, "mean_fprec_rate"          , &
-                                                data=atmos_ice_boundary%fprec(isc:iec,jsc:jec,1))
+         data=atmos_ice_boundary%fprec(isc:iec,jsc:jec,1))
     call fld_list_add(fldsToIce_num, fldsToIce, "mean_zonal_moment_flx"    , &
-                                                data=atmos_ice_boundary%u_flux(isc:iec,jsc:jec,1))
+         data=atmos_ice_boundary%u_flux(isc:iec,jsc:jec,1))
     call fld_list_add(fldsToIce_num, fldsToIce, "mean_merid_moment_flx",     &
-                                                data=atmos_ice_boundary%v_flux(isc:iec,jsc:jec,1))
+         data=atmos_ice_boundary%v_flux(isc:iec,jsc:jec,1))
 
-!    call fld_list_add(fldsToIce_num, fldsToIce, "mean_merid_moment_flx",     data=atmos_ice_boundary%t_flux(:,:,1))
-!    call fld_list_add(fldsToIce_num, fldsToIce, "mean_merid_moment_flx",     data=atmos_ice_boundary%q_flux(:,:,1))
-!    call fld_list_add(fldsToIce_num, fldsToIce, "mean_merid_moment_flx",     data=atmos_ice_boundary%coszen(:,:,1))
-!    call fld_list_add(fldsToIce_num, fldsToIce, "mean_merid_moment_flx",     data=atmos_ice_boundary%p(:,:,1))
-!    call fld_list_add(fldsToIce_num, fldsToIce, "mean_merid_moment_flx",     data=atmos_ice_boundary%dhdt(:,:,1))
-!    call fld_list_add(fldsToIce_num, fldsToIce, "mean_merid_moment_flx",     data=atmos_ice_boundary%dedt(:,:,1))
-!    call fld_list_add(fldsToIce_num, fldsToIce, "mean_merid_moment_flx",     data=atmos_ice_boundary%drdt(:,:,1))
+    !    call fld_list_add(fldsToIce_num, fldsToIce, "mean_merid_moment_flx",     data=atmos_ice_boundary%t_flux(:,:,1))
+    !    call fld_list_add(fldsToIce_num, fldsToIce, "mean_merid_moment_flx",     data=atmos_ice_boundary%q_flux(:,:,1))
+    !    call fld_list_add(fldsToIce_num, fldsToIce, "mean_merid_moment_flx",     data=atmos_ice_boundary%coszen(:,:,1))
+    !    call fld_list_add(fldsToIce_num, fldsToIce, "mean_merid_moment_flx",     data=atmos_ice_boundary%p(:,:,1))
+    !    call fld_list_add(fldsToIce_num, fldsToIce, "mean_merid_moment_flx",     data=atmos_ice_boundary%dhdt(:,:,1))
+    !    call fld_list_add(fldsToIce_num, fldsToIce, "mean_merid_moment_flx",     data=atmos_ice_boundary%ded(t:,:,1))
+    !    call fld_list_add(fldsToIce_num, fldsToIce, "mean_merid_moment_flx",     data=atmos_ice_boundary%drdt(:,:,1))
 
     !From OCN
-    call fld_list_add(fldsToIce_num, fldsToIce, "freezing_melting_potential", data=ice_data%frazil(isc:iec,jsc:jec))
-    call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_temperature"   , data=ice_data%t_surf(isc:iec,jsc:jec,1))
-    call fld_list_add(fldsToIce_num, fldsToIce, "s_surf"                    , data=ice_data%s_surf(isc:iec,jsc:jec))
-    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_zonal"         , data=ice_data%u_ocn(isc:iec,jsc:jec))
-    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_merid"         , data=ice_data%v_ocn(isc:iec,jsc:jec))
-    call fld_list_add(fldsToIce_num, fldsToIce, "sea_lev"                   , data=ice_data%sea_lev(isc:iec,jsc:jec))
+    call fld_list_add(fldsToIce_num, fldsToIce, "freezing_melting_potential", &
+         data=ocean_ice_boundary%frazil(isc:iec,jsc:jec))
+    call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_temperature"   , &
+         data=ocean_ice_boundary%t(isc:iec,jsc:jec))
+    call fld_list_add(fldsToIce_num, fldsToIce, "s_surf"                    , &
+         data=ocean_ice_boundary%s(isc:iec,jsc:jec))
+    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_zonal"         , &
+         data=ocean_ice_boundary%u(isc:iec,jsc:jec))
+    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_merid"         , &
+         data=ocean_ice_boundary%v(isc:iec,jsc:jec))
+    call fld_list_add(fldsToIce_num, fldsToIce, "sea_lev"                   , &
+         data=ocean_ice_boundary%sea_level(isc:iec,jsc:jec))
 
 
-!--------- export fields from Sea Ice -------------
+    !--------- export fields from Sea Ice -------------
 
     !To ATM
     !Niki: Have to have at least one export field without providing the data argument, otherwise ESMF fails!!!
     call fld_list_add(fldsFrIce_num, fldsFrIce, "ice_mask")     !Niki: Should be set later
     call fld_list_add(fldsFrIce_num, fldsFrIce, "ice_fraction") !Niki: Should be 1-part_size(:,:,1) 
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "sea_ice_temperature"    , &
-                                                data=ice_data%t_surf(isc:iec,jsc:jec,1))
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_vis_dir_albedo", &
-                                                data=ice_data%albedo_vis_dir(isc:iec,jsc:jec,1))
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dir_albedo",  &
-                                                data=ice_data%albedo_nir_dir(isc:iec,jsc:jec,1))
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_vis_dif_albedo", &
-                                                data=ice_data%albedo_vis_dif(isc:iec,jsc:jec,1))
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dif_albedo",  &
-                                                data=ice_data%albedo_nir_dif(isc:iec,jsc:jec,1))
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_air_ice_zonal", &
-                                                data=ice_data%flux_u_top_bgrid(isc:iec,jsc:jec,1))
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_air_ice_merid", &
-                                                data=ice_data%flux_v_top_bgrid(isc:iec,jsc:jec,1))
+
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "sea_ice_temperature")
+
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_vis_dir_albedo")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dir_albedo")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_vis_dif_albedo")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dif_albedo")
+
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_air_ice_zonal")!Niki: Isn't this -Atmos_boundary%u_flux?
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_air_ice_merid")
+
     !To OCN (corresponds to fldsToOcn in MOM5 cap) !Niki: Why aren't the following among the init_field_ice_export- ?
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_zonal_moment_flx",     &
-                                                data=ice_data%flux_u(isc:iec,jsc:jec))
+         data=ice_data%flux_u(isc:iec,jsc:jec))
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_merid_moment_flx",     &
-                                                data=ice_data%flux_v(isc:iec,jsc:jec))
+         data=ice_data%flux_v(isc:iec,jsc:jec))
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_sensi_heat_flx"  ,     &
-                                                data=ice_data%flux_t(isc:iec,jsc:jec))
+         data=ice_data%flux_t(isc:iec,jsc:jec))
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_evap_rate"       ,     &
-                                                data=ice_data%flux_q(isc:iec,jsc:jec))
-   call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_salt_rate"       ,     &
-                                               data=ice_data%flux_salt(isc:iec,jsc:jec))
+         data=ice_data%flux_q(isc:iec,jsc:jec))
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_salt_rate"       ,     &
+         data=ice_data%flux_salt(isc:iec,jsc:jec))
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_net_lw_flx"      ,     &
-                                                data=ice_data%flux_lw(isc:iec,jsc:jec)  )
+         data=ice_data%flux_lw(isc:iec,jsc:jec)  )
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_net_sw_vis_dir_flx",   &
-                                                data=ice_data%flux_sw_vis_dir(isc:iec,jsc:jec))
+         data=ice_data%flux_sw_vis_dir(isc:iec,jsc:jec))
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_net_sw_vis_dif_flx",   &
-                                                data=ice_data%flux_sw_vis_dif(isc:iec,jsc:jec))
+         data=ice_data%flux_sw_vis_dif(isc:iec,jsc:jec))
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_net_sw_ir_dir_flx" ,   &
-                                                data=ice_data%flux_sw_nir_dir(isc:iec,jsc:jec))
+         data=ice_data%flux_sw_nir_dir(isc:iec,jsc:jec))
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_net_sw_ir_dif_flx" ,   &
-                                                data=ice_data%flux_sw_nir_dif(isc:iec,jsc:jec))
+         data=ice_data%flux_sw_nir_dif(isc:iec,jsc:jec))
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_prec_rate"       ,     &
-                                                data=ice_data%lprec(isc:iec,jsc:jec)  )
+         data=ice_data%lprec(isc:iec,jsc:jec)  )
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_fprec_rate"      ,     &
-                                                data=ice_data%fprec(isc:iec,jsc:jec)  )
+         data=ice_data%fprec(isc:iec,jsc:jec)  )
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_runoff_rate"     ,     &
-                                                data=ice_data%runoff(isc:iec,jsc:jec) )
+         data=ice_data%runoff(isc:iec,jsc:jec) )
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_calving_rate"    ,     &
-                                                data=ice_data%calving(isc:iec,jsc:jec))
+         data=ice_data%calving(isc:iec,jsc:jec))
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_runoff_heat_flx" ,     &
-                                                data=ice_data%runoff_hflx(isc:iec,jsc:jec) )
+         data=ice_data%runoff_hflx(isc:iec,jsc:jec) )
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_calving_heat_flx",     &
-                                                data=ice_data%calving_hflx(isc:iec,jsc:jec))
+         data=ice_data%calving_hflx(isc:iec,jsc:jec))
     call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_pres_height_surface" , &
-                                                data=ice_data%p_surf(isc:iec,jsc:jec) )
+         data=ice_data%p_surf(isc:iec,jsc:jec) )
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mass_of_overlying_sea_ice", &
-                                                data=ice_data%mi(isc:iec,jsc:jec))
+         data=ice_data%mi(isc:iec,jsc:jec))
 
   end subroutine SIS1_FieldsSetup
 
@@ -1372,9 +1632,9 @@ module sis1_cap_mod
 
     num = num + 1
     if (num > fldsMax) then
-      call ESMF_LogWrite(trim(subname)//": ERROR num gt fldsMax "//trim(stdname), &
-        ESMF_LOGMSG_ERROR, line=__LINE__, file=__FILE__, rc=dbrc)
-      return
+       call ESMF_LogWrite(trim(subname)//": ERROR num gt fldsMax "//trim(stdname), &
+            ESMF_LOGMSG_ERROR, line=__LINE__, file=__FILE__, rc=dbrc)
+       return
     endif
 
     fldlist(num)%stdname        = trim(stdname)
@@ -1385,12 +1645,38 @@ module sis1_cap_mod
     endif
     fldlist(num)%transferOffer  = trim(transferOffer)
     if (present(data)) then
-      fldlist(num)%assoc        = .true.
-      fldlist(num)%farrayPtr    => data
+       fldlist(num)%assoc        = .true.
+       fldlist(num)%farrayPtr    => data
     else
-      fldlist(num)%assoc        = .false.
+       fldlist(num)%assoc        = .false.
     endif
 
   end subroutine fld_list_add
+
+  subroutine State_GetFldPtr(ST, fldname, fldptr, rc)
+    type(ESMF_State), intent(in) :: ST
+    character(len=*), intent(in) :: fldname
+    real(ESMF_KIND_R8), pointer, intent(in) :: fldptr(:,:)
+    integer, intent(out), optional :: rc
+
+    ! local variables
+    type(ESMF_Field) :: lfield
+    integer :: lrc
+    character(len=*),parameter :: subname='(sis_cap:State_GetFldPtr)'
+
+    call ESMF_StateGet(ST, itemName=trim(fldname), field=lfield, rc=lrc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
+    call ESMF_FieldGet(lfield, farrayPtr=fldptr, rc=lrc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+         line=__LINE__, &
+         file=__FILE__)) &
+         return  ! bail out
+
+    if (present(rc)) rc = lrc
+
+  end subroutine State_GetFldPtr
 
 end module sis1_cap_mod
