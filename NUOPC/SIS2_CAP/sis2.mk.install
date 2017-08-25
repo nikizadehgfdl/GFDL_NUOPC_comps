@@ -2,6 +2,6 @@
 # src location Zeus: wd
 
 ESMF_DEP_FRONT     = sis2_cap_mod
-ESMF_DEP_INCPATH   = /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/trunk/GFDL_NUOPC_comps-INSTALL/SIS2
+ESMF_DEP_INCPATH   = /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/trunk.mom6sis2/GFDL_NUOPC_comps-INSTALL/SIS2
 ESMF_DEP_CMPL_OBJS = 
-ESMF_DEP_LINK_OBJS = /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/trunk/GFDL_NUOPC_comps-INSTALL/SIS2/libsis2_cap.a /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/trunk/GFDL_NUOPC_comps-INSTALL/SIS2/libSIS2.a /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/trunk/GFDL_NUOPC_comps-INSTALL/SIS2/libMOM6.a /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/trunk/GFDL_NUOPC_comps-INSTALL/SIS2/libFMS.a
+ESMF_DEP_LINK_OBJS = /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/trunk.mom6sis2/GFDL_NUOPC_comps-INSTALL/SIS2/libsis2_cap.a /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/trunk.mom6sis2/GFDL_NUOPC_comps-INSTALL/SIS2/libSIS2.a /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/trunk.mom6sis2/GFDL_NUOPC_comps-INSTALL/SIS2/libMOM6.a /lustre/f1/unswept/Niki.Zadeh/misc/NEMS/UGCS-Seasonal0.4.DREV88884.SIS2/trunk.mom6sis2/GFDL_NUOPC_comps-INSTALL/SIS2/libFMS.a

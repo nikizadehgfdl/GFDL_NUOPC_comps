@@ -31,6 +31,7 @@ socn_mk       = $(SOCN_DIR)/socn.mk
 xocn_mk       = $(XOCN_DIR)/xocn.mk
 hycom_mk      = $(HYCOM_DIR)/hycom_nuopc.mk
 mom5_mk       = $(MOM5_DIR)/mom5.mk
+mom6_mk       = $(MOM6_DIR)/mom6.mk
 pom_mk        = $(POM_DIR)/pom.mk
 
 ################################################################################
@@ -41,6 +42,7 @@ sice_mk       = $(SICE_DIR)/sice.mk
 xice_mk       = $(XICE_DIR)/xice.mk
 cice_mk	      = $(CICE_DIR)/cice.mk
 sis2_mk       = $(SIS2_DIR)/sis2.mk
+sis1_mk       = $(SIS1_DIR)/sis1.mk
 
 ################################################################################
 ## WAV settings

@@ -72,6 +72,9 @@
 #ifdef FRONT_MOM5
       use FRONT_MOM5,       only: MOM5_SS   => SetServices
 #endif
+#ifdef FRONT_MOM6
+      use FRONT_MOM6,       only: MOM6_SS   => SetServices
+#endif
 #ifdef FRONT_POM
       use FRONT_POM,        only: POM_SS    => SetServices
 #endif
@@ -87,6 +90,9 @@
 #endif
 #ifdef FRONT_SIS2
       use FRONT_SIS2,       only: SIS2_SS   => SetServices
+#endif
+#ifdef FRONT_SIS1
+      use FRONT_SIS1,       only: SIS1_SS   => SetServices
 #endif
   ! - Handle build time WAV options:
 #ifdef FRONT_SWAV
@@ -2913,6 +2919,19 @@
               file=__FILE__, rcToReturn=rc)
             return  ! bail out
 #endif
+          elseif (trim(model) == "mom6") then
+#ifdef FRONT_MOM6
+            call NUOPC_DriverAddComp(driver, trim(prefix), MOM6_SS, &
+              petList=petList, comp=comp, rc=rc)
+            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+              line=__LINE__, file=trim(name)//":"//__FILE__)) return  ! bail out
+#else
+            write (msg, *) "Model '", trim(model), "' was requested, "// &
+              "but is not available in the executable!"
+            call ESMF_LogSetError(ESMF_RC_NOT_VALID, msg=msg, line=__LINE__, &
+              file=__FILE__, rcToReturn=rc)
+            return  ! bail out
+#endif
           elseif (trim(model) == "pom") then
 #ifdef FRONT_POM
             call NUOPC_DriverAddComp(driver, trim(prefix), POM_SS, &
@@ -2968,6 +2987,19 @@
           elseif (trim(model) == "sis2") then
 #ifdef FRONT_SIS2
             call NUOPC_DriverAddComp(driver, trim(prefix), SIS2_SS, &
+              petList=petList, comp=comp, rc=rc)
+            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+              line=__LINE__, file=trim(name)//":"//__FILE__)) return  ! bail out
+#else
+            write (msg, *) "Model '", trim(model), "' was requested, "// &
+              "but is not available in the executable!"
+            call ESMF_LogSetError(ESMF_RC_NOT_VALID, msg=msg, line=__LINE__, &
+              file=__FILE__, rcToReturn=rc)
+            return  ! bail out
+#endif
+          elseif (trim(model) == "sis1") then
+#ifdef FRONT_SIS1
+            call NUOPC_DriverAddComp(driver, trim(prefix), SIS1_SS, &
               petList=petList, comp=comp, rc=rc)
             if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
               line=__LINE__, file=trim(name)//":"//__FILE__)) return  ! bail out
